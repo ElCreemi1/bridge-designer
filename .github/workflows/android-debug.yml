@@ -82,6 +82,30 @@ jobs:
           test -s android/app/src/main/assets/public/img/splash.png
           test -s android/app/src/main/assets/public/img/loading.gif
 
+      - name: Restrict phone activity to landscape
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          namespace = 'http://schemas.android.com/apk/res/android'
+          ET.register_namespace('android', namespace)
+          tree = ET.parse(path)
+          activities = [activity for activity in tree.getroot().findall('./application/activity')
+                        if activity.get('{' + namespace + '}name', '').endswith('MainActivity')]
+          if len(activities) != 1:
+              raise SystemExit('Expected exactly one MainActivity; refusing to patch an unknown manifest')
+          activities[0].set('{' + namespace + '}screenOrientation', 'sensorLandscape')
+          tree.write(path, encoding='utf-8', xml_declaration=True)
+          verified = ET.parse(path).getroot().findall('./application/activity')
+          if not any(activity.get('{' + namespace + '}name', '').endswith('MainActivity') and
+                     activity.get('{' + namespace + '}screenOrientation') == 'sensorLandscape'
+                     for activity in verified):
+              raise SystemExit('Landscape orientation verification failed')
+          print('MainActivity configured for either landscape orientation')
+          PY
+
       - name: Build debug APK
         working-directory: android
         run: |
@@ -121,8 +145,9 @@ jobs:
             echo "Artifact: $ARTIFACT_URL"
             echo
             echo 'Compilation and packaging succeeded. This is not a device-tested release.'
-            echo 'Native startup no longer redirects for desktop-only mouse and screen requirements. Actual runtime checks remain enabled.'
-            echo 'Phone layout, gesture cancellation, and file handling remain incomplete.'
+            echo 'MainActivity requests sensorLandscape. Touch layouts constrain the editor and dialogs to the viewport; oversized toolbars scroll horizontally.'
+            echo 'The initial drafting cover is intentionally retained until a valid design is opened or created.'
+            echo 'Gesture handling, phone layout, and file handling still require device validation.'
             echo 'The APK uses a temporary debug signing key; a later build may require uninstalling the previous build. Export bridge files before uninstalling to avoid data loss.'
             echo 'Resolved packaging dependency records are included in the artifact; the repository lockfile was not changed by this workflow.'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -2,70 +2,77 @@
    SPDX-License-Identifier: GPL-3.0-or-later */
 
 body {
-  // Don't let jqxToolbars melt down trying to minimize.
+  // Keep desktop toolbars at their intended width. Touch layouts scroll them instead.
   min-width: 1100px;
 }
 
-.jqx-window-content {
-  padding: 0px;
-}
-
-.jqx-expander-header {
-  border: 0;
-  background-color: white;
-}
-
+.jqx-window-content { padding: 0px; }
+.jqx-expander-header { border: 0; background-color: white; }
 .jqx-expander-content-bottom {
-  width: 100%;
-  border: 0;
-  padding-left: 0;
-  padding-right: 0;
+  width: 100%; border: 0; padding-left: 0; padding-right: 0;
 }
-
-.jqx-cell {
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-.jqx-notification-container {
-  // Ensure toasts aren't hidden.
-  z-index: 99999;
-}
+.jqx-cell { padding-top: 0; padding-bottom: 0; }
+.jqx-notification-container { z-index: 99999; }
 
 .loading-div {
-  height: 100vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
 }
-
-.loading-img {
-  width: 319px;
-  margin-top: 48px;
-}
-
+.loading-img { width: 319px; margin-top: 48px; }
 .splash-img {
-  width: 600px;
-  height: 400px;
-  border-collapse: collapse;
-  border: 3px groove darkgray;
+  width: 600px; height: 400px; border-collapse: collapse; border: 3px groove darkgray;
 }
 
-// Cause window.print() to include entire document.
+// Experimental touch layout. Do not hide the initial drafting cover or modal overlays:
+// completing New/Open remains necessary before the editor has a valid design.
+@media screen and (pointer: coarse) {
+  html, body {
+    width: 100%; min-width: 0; height: 100%; margin: 0; padding: 0;
+    overflow: hidden;
+  }
+  app-root { display: block; width: 100%; height: 100%; min-width: 0; }
+  body .top-view {
+    box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0;
+    height: 100vh; height: 100dvh; min-height: 0; overflow: hidden;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    grid-template-columns: min-content minmax(0, 1fr) min-content;
+    grid-template-rows: min-content min-content minmax(0, 1fr) min-content;
+  }
+  body .menus { min-width: 0; max-width: 100%; }
+  body .toolbar-wrapper {
+    box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0;
+    overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x;
+  }
+  body .toolbar-wrapper toolbar-a, body .toolbar-wrapper toolbar-b {
+    display: block; width: 1100px; min-width: 1100px;
+  }
+  body .drafting-panel { min-width: 0; min-height: 0; overflow: hidden; }
+  body .member-table { min-width: 0; max-width: 30vw; overflow: auto; }
+  body .fly-thru-pane { min-width: 0; min-height: 0; max-width: 100%; }
+
+  // jqxWindow uses fixed pixel dimensions and inline positioning. Clamp visible
+  // dialogs to the phone and allow oversized content to scroll rather than clip.
+  body .jqx-window {
+    box-sizing: border-box; position: fixed !important;
+    top: max(8px, env(safe-area-inset-top)) !important;
+    left: max(8px, env(safe-area-inset-left)) !important;
+    margin: 0 !important; min-width: 0 !important; min-height: 0 !important;
+    max-width: calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)) !important;
+    max-height: calc(100vh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+  }
+  body .jqx-window-content {
+    box-sizing: border-box; max-width: 100% !important; min-width: 0 !important;
+    max-height: calc(100vh - 64px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+    max-height: calc(100dvh - 64px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+    overflow: auto !important; touch-action: pan-x pan-y;
+  }
+}
+
 @media print {
-
-  html,
-  body,
-  div,
-  section {
-    overflow: visible !important;
-    height: auto !important;
-  }
-
-  img {
-    max-width: 100% important;
-    display: block;
-  }
+  html, body, div, section { overflow: visible !important; height: auto !important; }
+  img { max-width: 100% !important; display: block; }
 }
