@@ -1,0 +1,113 @@
+name: Android debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/android-debug.yml'
+      - 'capacitor.config.json'
+      - 'angular.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'src/**'
+      - 'public/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - name: Install locked web dependencies
+        run: npm ci
+
+      - name: Install experimental Android packaging dependencies
+        run: |
+          npm install --save-exact @capacitor/core@7 @capacitor/android@7
+          npm install --save-dev --save-exact @capacitor/cli@7
+
+      - name: Compile Angular application
+        run: |
+          npx ng build --configuration production --base-href ./
+          test -s dist/bridge-designer/browser/index.html
+
+      - name: Generate and synchronize Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Collect APK and resolved dependency records
+        run: |
+          mkdir -p apk-artifact
+          cp android/app/build/outputs/apk/debug/app-debug.apk apk-artifact/bridge-designer-touch-debug.apk
+          cp package.json apk-artifact/resolved-package.json
+          cp package-lock.json apk-artifact/resolved-package-lock.json
+          cp capacitor.config.json apk-artifact/
+          cp COPYING apk-artifact/
+          cp ANDROID-TOUCH.md apk-artifact/
+          printf '%s\n' "$GITHUB_SHA" > apk-artifact/source-commit.txt
+          cd apk-artifact
+          sha256sum bridge-designer-touch-debug.apk > SHA256SUMS.txt
+
+      - name: Upload experimental APK
+        id: artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridge-designer-touch-debug-${{ github.run_number }}
+          path: apk-artifact/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Record build result
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: |
+          {
+            echo '## Experimental Android debug APK'
+            echo
+            echo "Source commit: $GITHUB_SHA"
+            echo "Artifact: $ARTIFACT_URL"
+            echo
+            echo 'Compilation and packaging succeeded. This is not a device-tested release.'
+            echo 'Phone layout, browser capability warnings, gesture cancellation, and file handling remain incomplete.'
+            echo 'The APK uses a temporary debug signing key; a later build may require uninstalling the previous build. Export bridge files before uninstalling to avoid data loss.'
+            echo 'Resolved packaging dependency records are included in the artifact; the repository lockfile was not changed by this workflow.'
+          } >> "$GITHUB_STEP_SUMMARY"
