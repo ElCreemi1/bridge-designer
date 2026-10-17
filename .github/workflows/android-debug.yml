@@ -66,16 +66,21 @@ jobs:
           npm install --save-exact @capacitor/core@7 @capacitor/android@7
           npm install --save-dev --save-exact @capacitor/cli@7
 
-      - name: Compile Angular application
+      - name: Compile Angular application with root-relative assets
         run: |
-          npx ng build --configuration production --base-href ./
+          npx ng build --configuration production --base-href /
           test -s dist/bridge-designer/browser/index.html
+          test -s dist/bridge-designer/browser/img/splash.png
+          test -s dist/bridge-designer/browser/img/loading.gif
 
       - name: Generate and synchronize Android project
         run: |
           npx cap add android
           npx cap sync android
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
+          test -s android/app/src/main/assets/public/index.html
+          test -s android/app/src/main/assets/public/img/splash.png
+          test -s android/app/src/main/assets/public/img/loading.gif
 
       - name: Build debug APK
         working-directory: android
@@ -116,7 +121,8 @@ jobs:
             echo "Artifact: $ARTIFACT_URL"
             echo
             echo 'Compilation and packaging succeeded. This is not a device-tested release.'
-            echo 'Phone layout, browser capability warnings, gesture cancellation, and file handling remain incomplete.'
+            echo 'Native startup no longer redirects for desktop-only mouse and screen requirements. Actual runtime checks remain enabled.'
+            echo 'Phone layout, gesture cancellation, and file handling remain incomplete.'
             echo 'The APK uses a temporary debug signing key; a later build may require uninstalling the previous build. Export bridge files before uninstalling to avoid data loss.'
             echo 'Resolved packaging dependency records are included in the artifact; the repository lockfile was not changed by this workflow.'
           } >> "$GITHUB_STEP_SUMMARY"
