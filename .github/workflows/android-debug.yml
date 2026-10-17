@@ -43,11 +43,20 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android platform
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - name: Verify preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "Using preinstalled Android SDK: $SDK"
+          for required in platforms/android-35/android.jar build-tools/35.0.0/aapt2 platform-tools/adb; do
+            if [ ! -s "$SDK/$required" ]; then
+              echo "::error::Required preinstalled SDK file is missing: $SDK/$required"
+              ls -la "$SDK" || true
+              exit 1
+            fi
+          done
+          printf 'ANDROID_HOME=%s\nANDROID_SDK_ROOT=%s\n' "$SDK" "$SDK" >> "$GITHUB_ENV"
 
       - name: Install locked web dependencies
         run: npm ci
