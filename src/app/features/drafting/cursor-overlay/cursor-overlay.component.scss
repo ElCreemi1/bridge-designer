@@ -6,4 +6,8 @@
   left: 0;
   top: 0;
   z-index: 1;
+  // Gestures on the drafting canvas belong to the editor, not page scrolling.
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }

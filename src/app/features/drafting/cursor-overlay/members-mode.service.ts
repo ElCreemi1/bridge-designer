@@ -18,6 +18,8 @@ export class MembersModeService {
   private _ctx: CanvasRenderingContext2D | undefined;
   private addMemberRequest: EventEmitter<Member> | undefined;
   private readonly existingMemberJointIndices = new Set<number>();
+  private touchAnchor: Joint | undefined;
+  private touchStart: { x: number; y: number; pointerId: number } | undefined;
 
   constructor(
     private readonly bridgeService: BridgeService,
@@ -28,6 +30,7 @@ export class MembersModeService {
   ) {}
 
   public initialize(ctx: CanvasRenderingContext2D, addMemberRequest: EventEmitter<Member>): MembersModeService {
+    this.cancelTouch();
     this._ctx = ctx;
     this.addMemberRequest = addMemberRequest;
     return this;
@@ -37,50 +40,93 @@ export class MembersModeService {
     return Utility.assertNotUndefined(this._ctx);
   }
 
+  private rememberConnectedJoints(anchor: Joint): void {
+    this.existingMemberJointIndices.clear();
+    this.bridgeService.findConnectedJoints(anchor).forEach(joint =>
+      this.existingMemberJointIndices.add(joint.index),
+    );
+  }
+
+  private emitMember(anchor: Joint, target: Joint): void {
+    const material = this.inventorySelectionService.material;
+    const shape = this.inventorySelectionService.shape;
+    if (!material || !shape) throw new Error('No material selected for new member');
+    this.addMemberRequest?.emit(new Member(-1, anchor, target, material, shape));
+    this.hotElementService.invalidate(this.ctx);
+  }
+
+  private cancelTouch(): void {
+    if (this.touchAnchor) this.memberCursorService.end();
+    this.touchAnchor = undefined;
+    this.touchStart = undefined;
+    this.existingMemberJointIndices.clear();
+  }
+
   handlePointerDown(event: PointerEvent): void {
-    if (event.buttons !== 1 << 0 || this.hotElementDragService.isDragging()) {
+    if (event.buttons !== 1 << 0 || this.hotElementDragService.isDragging()) return;
+    if (event.pointerType === 'touch') {
+      if (event.isPrimary) {
+        this.touchStart = { x: event.offsetX, y: event.offsetY, pointerId: event.pointerId };
+      }
       return;
     }
+    this.cancelTouch();
     const hotElement = this.hotElementService.hotElement;
     if (hotElement instanceof Joint) {
-      this.existingMemberJointIndices.clear();
-      this.bridgeService
-        .findConnectedJoints(hotElement)
-        .forEach(joint => this.existingMemberJointIndices.add(joint.index));
+      this.rememberConnectedJoints(hotElement);
       this.memberCursorService.start(this.ctx, event.offsetX, event.offsetY, hotElement);
     }
   }
 
   handlePointerMove(event: PointerEvent): void {
-    if (this.hotElementDragService.isDragging()) {
-      return;
-    }
+    if (this.hotElementDragService.isDragging()) return;
     this.hotElementService.updateRenderedHotElement(this.ctx, event.offsetX, event.offsetY, {
-      considerOnly: [Joint, GuideKnob, Labels],
+      considerOnly: event.pointerType === 'touch' ? [Joint] : [Joint, GuideKnob, Labels],
       excludedJointIndices: this.existingMemberJointIndices,
     });
     this.memberCursorService.update(event.offsetX, event.offsetY, this.hotElementService.hotElement);
   }
 
   handlePointerUp(event: PointerEvent): void {
-    if (event.button !== 0 || this.hotElementDragService.isDragging(event)) {
+    if (event.pointerType === 'touch') {
+      this.finishTouchTap(event);
       return;
     }
+    if (event.button !== 0 || this.hotElementDragService.isDragging(event)) return;
     const anchor = this.memberCursorService.end();
-    if (!anchor) {
-      return;
-    }
+    if (!anchor) return;
     this.existingMemberJointIndices.clear();
     const hotElement = this.hotElementService.hotElement;
-    if (anchor === hotElement || !(hotElement instanceof Joint)) {
+    if (anchor !== hotElement && hotElement instanceof Joint) this.emitMember(anchor, hotElement);
+  }
+
+  private finishTouchTap(event: PointerEvent): void {
+    const start = this.touchStart;
+    this.touchStart = undefined;
+    if (!start || start.pointerId !== event.pointerId || this.hotElementDragService.isDragging(event)) return;
+    // A move is not a tap. Keep the first endpoint so the user can retry the second tap.
+    if (Math.hypot(event.offsetX - start.x, event.offsetY - start.y) > 12) return;
+    this.hotElementService.updateRenderedHotElement(this.ctx, event.offsetX, event.offsetY, {
+      considerOnly: [Joint],
+      excludedJointIndices: this.existingMemberJointIndices,
+    });
+    const target = this.hotElementService.hotElement;
+    if (!(target instanceof Joint)) {
+      this.cancelTouch();
       return;
     }
-    const material = this.inventorySelectionService.material;
-    const shape = this.inventorySelectionService.shape;
-    if (!material || !shape) {
-      throw new Error('No material selected for new member');
+    if (!this.touchAnchor) {
+      this.touchAnchor = target;
+      this.rememberConnectedJoints(target);
+      this.memberCursorService.start(this.ctx, event.offsetX, event.offsetY, target);
+      return;
     }
-    this.addMemberRequest?.emit(new Member(-1, anchor, hotElement, material, shape));
-    this.hotElementService.invalidate(this.ctx);
+    const anchor = this.touchAnchor;
+    this.cancelTouch();
+    if (anchor !== target) this.emitMember(anchor, target);
+  }
+
+  handlePointerCancel(event: PointerEvent): void {
+    if (event.pointerType === 'touch') this.cancelTouch();
   }
 }

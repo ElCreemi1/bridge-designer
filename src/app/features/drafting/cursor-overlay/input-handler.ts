@@ -7,23 +7,52 @@ export type InputHandlerSet = {
   handlePointerMove?: (event: PointerEvent) => void;
   handlePointerDown?: (event: PointerEvent) => void;
   handlePointerUp?: (event: PointerEvent) => void;
+  handlePointerCancel?: (event: PointerEvent) => void;
   handleDocumentKeyDown?: (event: KeyboardEvent) => void;
 };
 
-/**
- * A set of delegating user input listeners that can be registered on a canvas.
- * A corresponding set of delegated handlers can be changed at any time.
- */
+/** Registered order is significant: draggable handlers precede mode handlers. */
 export class InputEventDelegator {
-  public handlerSet: InputHandlerSet = {}; // By default, nothing happens.
+  public handlerSet: InputHandlerSet = {};
+  private static readonly registered = new WeakMap<HTMLCanvasElement, InputEventDelegator[]>();
 
-  public register(canvas: HTMLCanvasElement) {
-    const that = this;
-    canvas.addEventListener('pointerenter', (event: PointerEvent) => that.handlerSet.handlePointerEnter?.(event));
-    canvas.addEventListener('pointerleave', (event: PointerEvent) => that.handlerSet.handlePointerLeave?.(event));
-    canvas.addEventListener('pointermove', (event: PointerEvent) => that.handlerSet.handlePointerMove?.(event));
-    canvas.addEventListener('pointerdown', (event: PointerEvent) => that.handlerSet.handlePointerDown?.(event));
-    canvas.addEventListener('pointerup', (event: PointerEvent) => that.handlerSet.handlePointerUp?.(event));
-    document.addEventListener('keydown', (event: KeyboardEvent) => that.handlerSet.handleDocumentKeyDown?.(event));
+  public register(canvas: HTMLCanvasElement): void {
+    const existing = InputEventDelegator.registered.get(canvas);
+    if (existing) {
+      if (!existing.includes(this)) existing.push(this);
+      return;
+    }
+    const delegates: InputEventDelegator[] = [this];
+    InputEventDelegator.registered.set(canvas, delegates);
+    const dispatch = (name: Exclude<keyof InputHandlerSet, 'handleDocumentKeyDown'>, event: PointerEvent) => {
+      for (const delegate of delegates) delegate.handlerSet[name]?.(event);
+    };
+    const accepts = (event: PointerEvent) => event.pointerType !== 'touch' || event.isPrimary;
+    canvas.addEventListener('pointerenter', event => {
+      if (accepts(event)) dispatch('handlePointerEnter', event);
+    });
+    canvas.addEventListener('pointerleave', event => {
+      if (accepts(event)) dispatch('handlePointerLeave', event);
+    });
+    canvas.addEventListener('pointermove', event => {
+      if (accepts(event)) dispatch('handlePointerMove', event);
+    });
+    canvas.addEventListener('pointerdown', event => {
+      if (!accepts(event)) return;
+      if (event.pointerType === 'touch') {
+        // A finger cannot hover. Refresh the mode's target before draggable handlers run.
+        dispatch('handlePointerMove', event);
+      }
+      dispatch('handlePointerDown', event);
+    });
+    canvas.addEventListener('pointerup', event => {
+      if (accepts(event)) dispatch('handlePointerUp', event);
+    });
+    canvas.addEventListener('pointercancel', event => {
+      if (accepts(event)) dispatch('handlePointerCancel', event);
+    });
+    document.addEventListener('keydown', event => {
+      for (const delegate of delegates) delegate.handlerSet.handleDocumentKeyDown?.(event);
+    });
   }
 }
