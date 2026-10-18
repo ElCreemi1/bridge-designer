@@ -19,7 +19,12 @@ const isNativeAndroid = bridge?.isNativePlatform?.() === true && bridge?.getPlat
 // Touch devices (phones and tablets, including iOS Safari) run the experimental
 // touch port on the web as well. Like the native app, they skip the desktop-only
 // mouse, 1280x720 screen and browser-brand checks but keep genuine runtime checks.
-const isTouchPrimary = window.matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0;
+// Stylus phones (e.g. Galaxy S Pen) can report a fine primary pointer, so accept any
+// touch capability or a mobile user agent. iPadOS may present itself as a Mac.
+const isTouchPrimary =
+  navigator.maxTouchPoints > 0 ||
+  window.matchMedia('(any-pointer: coarse)').matches ||
+  /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
 function bootstrap(): void {
   bootstrapApplication(AppComponent, appConfig).catch((err: unknown) => console.error(err));

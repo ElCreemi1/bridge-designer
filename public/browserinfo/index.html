@@ -31,7 +31,15 @@
         font-weight: bold;
       }
     </style>
-  </head>
+      <script>
+      // Touch devices run the touch port; send them back to the app, e.g. after a reload of this page.
+      if (navigator.maxTouchPoints > 0 ||
+          (window.matchMedia && window.matchMedia('(any-pointer: coarse)').matches) ||
+          /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
+        window.location.replace('../' + window.location.search + window.location.hash);
+      }
+    </script>
+</head>
   <body>
     <h1>About your browser...</h1>
     <div class="p">
