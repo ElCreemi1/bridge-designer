@@ -1,56 +1,30 @@
 <!-- Copyright (c) 2025-2026 Gene Ressler
      SPDX-License-Identifier: GPL-3.0-or-later -->
-
-<jqxWindow
-  #dialog
-  [autoOpen]="false"
-  [position]="{ x: 12, y: 122 }"
-  [isModal]="false"
-  [width]="windowWidth"
-  [height]="windowHeight"
-  [resizable]="false"
-  (onClose)="handleClose()"
->
-  <div class="header">
-    <img
-      src="img/tools.png"
-      class="header-icon"
-    />
-    Tools
+<section #palette class="floating-tools" [class.collapsed]="!expanded"
+  [hidden]="uiMode !== 'drafting'" [style.left.px]="x" [style.top.px]="y"
+  role="region" aria-label="Drawing tools palette">
+  <div class="palette-header" [hidden]="!expanded">
+    <button type="button" class="drag-handle" title="Drag to move tools; arrow keys also move the palette"
+      aria-label="Move tools palette" (pointerdown)="startDrag($event)"
+      (pointermove)="moveDrag($event)" (pointerup)="endDrag($event)"
+      (pointercancel)="endDrag($event)" (lostpointercapture)="endDrag($event)"
+      (keydown)="moveWithKeyboard($event)">
+      <img src="img/tools.png" class="header-icon" alt="" /> Tools <span aria-hidden="true">&#8942;&#8942;</span>
+    </button>
+    <button type="button" class="collapse-button" title="Collapse tools" aria-label="Collapse tools palette"
+      aria-controls="floating-drawing-tools" [attr.aria-expanded]="expanded" (click)="setExpanded(false)">&#8722;</button>
   </div>
-  <div class="content">
-    <jqxToggleButton
-      #jointsButton
-      [imgSrc]="'img/joint.png'"
-      [imgWidth]="imgSize"
-      [imgHeight]="imgSize"
-      [width]="buttonSize"
-      [height]="buttonSize"
-      [toggled]="true"
-    ></jqxToggleButton>
-    <jqxToggleButton
-      #membersButton
-      [imgSrc]="'img/member.png'"
-      [imgWidth]="imgSize"
-      [imgHeight]="imgSize"
-      [width]="buttonSize"
-      [height]="buttonSize"
-    ></jqxToggleButton>
-    <jqxToggleButton
-      #selectButton
-      [imgSrc]="'img/arrow.png'"
-      [imgWidth]="imgSize"
-      [imgHeight]="imgSize"
-      [width]="buttonSize"
-      [height]="buttonSize"
-    ></jqxToggleButton>
-    <jqxToggleButton
-      #eraseButton
-      [imgSrc]="'img/eraser.png'"
-      [imgWidth]="imgSize"
-      [imgHeight]="imgSize"
-      [width]="buttonSize"
-      [height]="buttonSize"
-    ></jqxToggleButton>
+  <div id="floating-drawing-tools" class="content" [hidden]="!expanded">
+    <jqxToggleButton #jointsButton title="Add joints" [imgSrc]="'img/joint.png'"
+      [imgWidth]="imgSize" [imgHeight]="imgSize" [width]="buttonSize" [height]="buttonSize" [toggled]="true"></jqxToggleButton>
+    <jqxToggleButton #membersButton title="Connect members" [imgSrc]="'img/member.png'"
+      [imgWidth]="imgSize" [imgHeight]="imgSize" [width]="buttonSize" [height]="buttonSize"></jqxToggleButton>
+    <jqxToggleButton #selectButton title="Select or move joints" [imgSrc]="'img/arrow.png'"
+      [imgWidth]="imgSize" [imgHeight]="imgSize" [width]="buttonSize" [height]="buttonSize"></jqxToggleButton>
+    <jqxToggleButton #eraseButton title="Erase" [imgSrc]="'img/eraser.png'"
+      [imgWidth]="imgSize" [imgHeight]="imgSize" [width]="buttonSize" [height]="buttonSize"></jqxToggleButton>
   </div>
-</jqxWindow>
+  <button type="button" class="restore-button" [hidden]="expanded" title="Expand tools"
+    aria-label="Expand tools palette" aria-controls="floating-drawing-tools" [attr.aria-expanded]="expanded"
+    (click)="setExpanded(true)"><img src="img/tools.png" class="header-icon" alt="" /> Tools</button>
+</section>

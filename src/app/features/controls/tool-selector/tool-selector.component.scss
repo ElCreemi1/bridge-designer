@@ -1,15 +1,24 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
-
-.content {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  padding: 1px;
+.floating-tools {
+  position: fixed; z-index: 1101; display: flex; flex-direction: column;
+  width: max-content; max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px);
+  box-sizing: border-box; border: 1px solid #777; border-radius: 7px;
+  background: white; color: #111; overflow: hidden; box-shadow: 0 2px 8px #0004;
+  font: 14px sans-serif;
 }
-
-.header-icon {
-  vertical-align: middle;
-  width: 16px;
-  height: 16px;
+.floating-tools[hidden], .palette-header[hidden], .content[hidden], .restore-button[hidden] { display: none !important; }
+.palette-header { display: flex; flex: none; align-items: center; gap: 4px; padding: 2px; border-bottom: 1px solid #bbb; background: #eee; }
+.drag-handle {
+  flex: 1; min-height: 44px; padding: 4px 8px; border: 0; border-radius: 4px;
+  background: transparent; color: inherit; font: inherit; text-align: left;
+  cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
 }
+.drag-handle:active { cursor: grabbing; background: #ddd; }
+.collapse-button { min-width: 44px; min-height: 44px; border: 1px solid #999; border-radius: 4px; background: white; color: #111; font-size: 22px; touch-action: manipulation; }
+.content { display: flex; flex-direction: row; align-items: center; gap: 4px; padding: 4px; min-height: 0; overflow: auto; }
+.header-icon { vertical-align: middle; width: 16px; height: 16px; margin-right: 4px; }
+.restore-button { display: block; min-width: 72px; min-height: 44px; padding: 7px 10px; border: 0; background: white; color: #111; font: inherit; touch-action: manipulation; }
+.floating-tools.collapsed { border-radius: 6px; }
+button:focus-visible { outline: 2px solid #1565c0; outline-offset: -3px; }
