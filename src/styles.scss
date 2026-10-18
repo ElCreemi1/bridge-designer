@@ -72,6 +72,24 @@ body {
   }
 }
 
+// Dialogs scaled to fit by touch-web-support.ts must not also be clamped, or they clip.
+html.touch-port body .jqx-window.touch-fit-zoomed {
+  max-width: none !important; max-height: none !important;
+}
+html.touch-port body .jqx-window.touch-fit-zoomed .jqx-window-content { max-height: none !important; }
+
+// Bridge Designer needs landscape on phones. Shown only in portrait on touch devices.
+.rotate-device-overlay { display: none; }
+@media screen and (orientation: portrait) and (max-width: 900px) {
+  html.touch-port .rotate-device-overlay {
+    display: flex; position: fixed; inset: 0; z-index: 2147483000;
+    flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    padding: 24px; box-sizing: border-box; text-align: center;
+    background: #1d2733; color: #fff; font: 18px/1.4 sans-serif;
+  }
+  html.touch-port .rotate-device-overlay svg { width: 96px; height: 96px; }
+}
+
 @media print {
   html, body, div, section { overflow: visible !important; height: auto !important; }
   img { max-width: 100% !important; display: block; }

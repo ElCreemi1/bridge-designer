@@ -40,3 +40,10 @@ The Focus button in the lower-left corner hides the menu bar, both toolbars, the
 ## Web version (iPhone and iPad)
 
 `.github/workflows/web-pages.yml` builds the same app on each push to `main` and publishes it with GitHub Pages at `https://<owner>.github.io/<repo>/`. It runs the center-load, pasta and fly-thru tests first. In Safari, Share > Add to Home Screen opens it without browser bars. The 3D simulation requires WebGL 2 (iOS/iPadOS 15 or later). Saved designs live in each browser's local storage, so a Home Screen copy and a Safari tab do not share them.
+
+### Landscape and dialogs on the web
+
+- Portrait on a phone shows a "Rotate your phone" screen.
+- On touch devices, Focus also requests full screen and a landscape lock. Android Chrome honors both; iOS Safari supports neither for web pages, so use the iOS rotation lock in landscape.
+- `manifest.webmanifest` declares `orientation: landscape` and `display: fullscreen`, so an Android Home Screen install opens locked to landscape.
+- `src/app/shared/touch/touch-web-support.ts` scales fixed-size jqxWindow dialogs (CSS zoom, minimum 45%) to fit short landscape screens, restores their inner sizes, and corrects jqxListBox hit-testing inside scaled dialogs. Other coordinate-based jQWidgets controls in scaled dialogs (the design-iteration grid) are not yet verified.

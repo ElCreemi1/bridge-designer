@@ -5,6 +5,7 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { appConfig } from './app/app.config';
 import { AppComponent } from './app/app.component';
 import { areBrowserFeaturesMissing, BROWSER_FEATURES } from './app/features/browser/browser-checks';
+import { installTouchWebSupport } from './app/shared/touch/touch-web-support';
 
 /** Removes watermarks from jqWidgets. */
 jqx.credits = '71208878-FCD1-4EC7-9249-BA0F153A5DE8';
@@ -31,6 +32,7 @@ function bootstrap(): void {
 }
 
 if (isNativeAndroid || isTouchPrimary) {
+  installTouchWebSupport();
   // A previous desktop-help redirect must not become the app's asset base.
   const infoPath = /\/browserinfo\/?$/;
   if (infoPath.test(window.location.pathname)) {

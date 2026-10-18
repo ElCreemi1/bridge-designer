@@ -2,6 +2,7 @@
    SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { AfterViewInit, Component, ElementRef, HostListener, ViewChild, ViewEncapsulation } from '@angular/core';
+import { enterLandscapeFullscreen, exitLandscapeFullscreen } from './shared/touch/touch-web-support';
 import { AboutDialogComponent } from './features/about/about-dialog/about-dialog.component';
 import { CostReportDialogComponent } from './features/costs/cost-report-dialog/cost-report-dialog.component';
 import { DesignIterationDialogComponent } from './features/iterations/design-iteration-dialog/design-iteration-dialog.component';
@@ -85,6 +86,10 @@ export class AppComponent implements AfterViewInit {
   }
   toggleFocusMode(): void {
     this.focusMode = !this.focusMode;
+    // On touch devices, Focus also goes full screen and locks landscape where the browser allows it.
+    if (document.documentElement.classList.contains('touch-port')) {
+      if (this.focusMode) void enterLandscapeFullscreen(); else exitLandscapeFullscreen();
+    }
     try { AppComponent.storage()?.setItem(AppComponent.FOCUS_MODE_KEY, this.focusMode ? '1' : '0'); } catch { /* Optional. */ }
   }
   @ViewChild('allowFreshStartDialog') allowFreshStartDialog!: AllowFreshStartDialogComponent;
