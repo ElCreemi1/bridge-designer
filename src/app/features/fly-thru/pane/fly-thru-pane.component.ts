@@ -1,16 +1,6 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
-
-import {
-  AfterViewInit,
-  ChangeDetectionStrategy,
-  ChangeDetectorRef,
-  Component,
-  ElementRef,
-  HostBinding,
-  HostListener,
-  ViewChild,
-} from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, HostBinding, HostListener, ViewChild } from '@angular/core';
 import { EventBrokerService } from '../../../shared/services/event-broker.service';
 import { Utility } from '../../../shared/classes/utility';
 import { AnimationService } from '../rendering/animation.service';
@@ -22,20 +12,17 @@ import { KeyboardService } from './keyboard.service';
 import { TextureService } from '../rendering/texture.service';
 
 @Component({
-  selector: 'fly-thru-pane',
-  imports: [FlyThruSettingsDialogComponent],
-  templateUrl: './fly-thru-pane.component.html',
-  styleUrl: './fly-thru-pane.component.scss',
+  selector: 'fly-thru-pane', imports: [FlyThruSettingsDialogComponent],
+  templateUrl: './fly-thru-pane.component.html', styleUrl: './fly-thru-pane.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FlyThruPaneComponent implements AfterViewInit {
-  @HostBinding('style.display') display: string = 'none';
+  @HostBinding('style.display') display = 'none';
   @ViewChild('wrapper') wrapper!: ElementRef<HTMLDivElement>;
   @ViewChild('flyThruCanvas') flyThruCanvas!: ElementRef<HTMLCanvasElement>;
-
-  // NOTE: This doesn't exploit "retina" displays with >1 physical pixel per css pixel.
-  width: number = screen.availWidth;
-  height: number = screen.availHeight;
+  width = screen.availWidth;
+  height = screen.availHeight;
+  private activePointer: number | undefined;
 
   constructor(
     private readonly animationControlsOverlayService: AnimationControlsOverlayService,
@@ -48,66 +35,67 @@ export class FlyThruPaneComponent implements AfterViewInit {
     private readonly viewportService: ViewportService,
   ) {}
 
-  /** Delegates left button down to UI handler. */
   handlePointerDown(event: PointerEvent): void {
-    if (event.button === 0) {
-      this.flyThruCanvas.nativeElement.setPointerCapture(event.pointerId);
-      this.animationControlsOverlayService.overlayUi.acceptPointerDown(event.offsetX, event.offsetY);
-    }
+    if (event.button !== 0 || this.activePointer !== undefined || (event.pointerType === 'touch' && !event.isPrimary)) return;
+    const ui = this.animationControlsOverlayService.overlayUi;
+    if (!ui) return;
+    event.preventDefault();
+    this.activePointer = event.pointerId;
+    this.flyThruCanvas.nativeElement.setPointerCapture(event.pointerId);
+    // Finger presses have no preceding hover. Resolve the icon at the press location.
+    ui.acceptPointerMove(event.offsetX, event.offsetY);
+    ui.acceptPointerDown(event.offsetX, event.offsetY);
   }
 
-  /** Delegates pointer move to UI handler. */
   handlePointerMove(event: PointerEvent): void {
-    this.animationControlsOverlayService.overlayUi.acceptPointerMove(event.offsetX, event.offsetY);
+    if ((event.pointerType === 'touch' && !event.isPrimary) ||
+        (this.activePointer !== undefined && event.pointerId !== this.activePointer)) return;
+    this.animationControlsOverlayService.overlayUi?.acceptPointerMove(event.offsetX, event.offsetY);
   }
 
-  /** Delegates left button up to UI handler. */
   handlePointerUp(event: PointerEvent): void {
-    if (event.button === 0) {
-      this.flyThruCanvas.nativeElement.releasePointerCapture(event.pointerId);
-      this.animationControlsOverlayService.overlayUi.acceptPointerUp(event.offsetX, event.offsetY);
+    if (event.button !== 0 || event.pointerId !== this.activePointer) return;
+    this.finishPointer(event.offsetX, event.offsetY);
+  }
+
+  private finishPointer(x = -1, y = -1): void {
+    const id = this.activePointer;
+    if (id === undefined) return;
+    this.activePointer = undefined;
+    try { this.animationControlsOverlayService.overlayUi?.acceptPointerUp(x, y); }
+    finally {
+      const canvas = this.flyThruCanvas.nativeElement;
+      if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
     }
   }
 
-  /** Delegates document key down to the handler service if the pane is visible. */
   @HostListener('document:keydown', ['$event'])
-  handleKeyDown(event: KeyboardEvent) {
-    if (this.display !== 'none') {
-      this.keyBoardService.handleKey(event.key);
-    }
-  }
-
-  /** Suppresses context menu. */
-  ignore(): boolean {
-    return false;
-  }
+  handleKeyDown(event: KeyboardEvent): void { if (this.display !== 'none') this.keyBoardService.handleKey(event.key); }
+  @HostListener('window:blur')
+  handleBlur(): void { this.finishPointer(); }
+  @HostListener('document:visibilitychange')
+  handleVisibilityChange(): void { if (document.hidden) this.finishPointer(); }
+  ignore(): boolean { return false; }
 
   private set isVisible(value: boolean) {
+    if (!value) this.finishPointer();
     this.display = value ? 'block' : 'none';
     this.changeDetector.detectChanges();
-    if (value) {
-      this.animationService.start();
-    } else {
-      this.animationService.stop();
-    }
+    if (value) this.animationService.start(); else this.animationService.stop();
   }
-
   private handleResize(): void {
     const parent = Utility.assertNotNull(this.flyThruCanvas.nativeElement.parentElement);
-    // Do nothing if canvas not yet visible.
-    if (parent.clientWidth === 0) {
-      return;
-    }
+    if (parent.clientWidth === 0 || parent.clientHeight === 0) return;
     this.viewportService.setViewport(this.width, this.height, parent.clientWidth, parent.clientHeight);
   }
-
   ngAfterViewInit(): void {
+    const canvas = this.flyThruCanvas.nativeElement;
+    canvas.style.touchAction = 'none';
+    canvas.addEventListener('pointercancel', event => { if (event.pointerId === this.activePointer) this.finishPointer(); });
+    canvas.addEventListener('lostpointercapture', event => { if (event.pointerId === this.activePointer) this.finishPointer(); });
     new ResizeObserver(() => this.handleResize()).observe(this.wrapper.nativeElement);
-    this.glService.initialize(this.flyThruCanvas.nativeElement);
-    // Must follow glService initialization above.
+    this.glService.initialize(canvas);
     this.textureService.loadAllTextures();
-    this.eventBrokerService.uiModeRequest.subscribe(info => {
-      this.isVisible = info.data === 'animation';
-    });
+    this.eventBrokerService.uiModeRequest.subscribe(info => { this.isVisible = info.data === 'animation'; });
   }
 }
