@@ -1,6 +1,5 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
-
 import { EventEmitter, Injectable } from '@angular/core';
 import { Point2D, Rectangle2D } from '../../../shared/classes/graphics';
 import { ElementSelectorService } from '../shared/element-selector.service';
@@ -19,9 +18,14 @@ import { Member } from '../../../shared/classes/member.model';
 import { GuideKnob } from '../shared/guides.service';
 import { Labels } from '../shared/labels.service';
 
-/** Implementation of the select drafting panel mode i/o. Includes moving the selected joint. */
 @Injectable({ providedIn: 'root' })
 export class SelectModeService {
+  private _ctx: CanvasRenderingContext2D | undefined;
+  private initialHotJoint: Joint | undefined;
+  private moveJointRequest: EventEmitter<{ joint: Joint; newLocation: Point2D }> | undefined;
+  private movingJoint: Joint | undefined;
+  private readonly cursor = Rectangle2D.createEmpty();
+  private readonly validPoint = new Point2D();
   constructor(
     private readonly bridgeService: BridgeService,
     private readonly coordinateService: CoordinateService,
@@ -32,65 +36,34 @@ export class SelectModeService {
     private readonly selectCursorService: SelectCursorService,
     private readonly selectedElementsService: SelectedElementsService,
   ) {}
-
-  private _ctx: CanvasRenderingContext2D | undefined;
-  private initialHotJoint: Joint | undefined;
-  private moveJointRequest: EventEmitter<{ joint: Joint; newLocation: Point2D }> | undefined;
-  private movingJoint: Joint | undefined;
-
-  public initialize(
-    ctx: CanvasRenderingContext2D,
-    moveJointRequest: EventEmitter<{ joint: Joint; newLocation: Point2D }>,
-  ): SelectModeService {
-    this._ctx = ctx;
-    this.moveJointRequest = moveJointRequest;
-    return this;
+  public initialize(ctx: CanvasRenderingContext2D, request: EventEmitter<{ joint: Joint; newLocation: Point2D }>): SelectModeService {
+    if (this._ctx) this.cancel();
+    this._ctx = ctx; this.moveJointRequest = request; return this;
   }
-
-  private get ctx(): CanvasRenderingContext2D {
-    return Utility.assertNotUndefined(this._ctx);
-  }
-
+  private get ctx(): CanvasRenderingContext2D { return Utility.assertNotUndefined(this._ctx); }
   handlePointerDown(event: PointerEvent): void {
-    // Left button down alone to start.
-    if (event.buttons !== 1 << 0 || this.hotElementDragService.isDragging()) {
-      return;
-    }
-    if (this.hotElementService.hotElement instanceof Joint) {
-      this.initialHotJoint = this.hotElementService.hotElement;
-    }
+    if (event.buttons !== 1 || this.hotElementDragService.isDragging()) return;
+    if (this.hotElementService.hotElement instanceof Joint) this.initialHotJoint = this.hotElementService.hotElement;
     this.selectCursorService.start(this.ctx, event.offsetX, event.offsetY);
   }
-
   handlePointerMove(event: PointerEvent): void {
-    if (this.hotElementDragService.isDragging()) {
-      return;
-    }
+    if (this.hotElementDragService.isDragging()) return;
     this.maybeSwitchToJointMove(event);
-    if (this.movingJoint) {
-      this.hotElementService.clearRenderedHotElement(this.ctx);
-    } else {
+    if (this.movingJoint) { this.hotElementService.clearRenderedHotElement(this.ctx); }
+    else {
       this.hideKeyboardJointMoveCursor();
       this.hotElementService.updateRenderedHotElement(this.ctx, event.offsetX, event.offsetY, {
-        excludeFixedJoints: true,
-        considerOnly: [Joint, Member, GuideKnob, Labels],
-        invalidate: true, // rectangle cursor may erase
+        excludeFixedJoints: true, considerOnly: [Joint, Member, GuideKnob, Labels], invalidate: true,
       });
     }
-    // These do nothing if the respective cursor isn't in use.
     this.selectCursorService.update(event.offsetX, event.offsetY);
     this.jointCursorService.move(this.ctx, event.offsetX, event.offsetY);
   }
-
-  private readonly cursor: Rectangle2D = Rectangle2D.createEmpty();
-
   handlePointerUp(event: PointerEvent): void {
-    if (event.button !== 0 || this.hotElementDragService.isDragging(event)) {
-      return;
-    }
-    const selectCursor = this.selectCursorService.end(event.offsetX, event.offsetY, this.cursor);
-    if (selectCursor) {
-      this.elementSelectorService.select(selectCursor, event.ctrlKey, EventOrigin.DRAFTING_PANEL);
+    if (event.button !== 0 || this.hotElementDragService.isDragging(event)) return;
+    const rectangle = this.selectCursorService.end(event.offsetX, event.offsetY, this.cursor);
+    if (rectangle) {
+      this.elementSelectorService.select(rectangle, event.ctrlKey, EventOrigin.DRAFTING_PANEL);
       this.hotElementService.invalidate(this.ctx);
     }
     if (this.movingJoint) {
@@ -99,80 +72,42 @@ export class SelectModeService {
     }
     this.movingJoint = this.initialHotJoint = undefined;
   }
-
-  private readonly validPoint = new Point2D();
-
+  private cancel(): void {
+    this.selectCursorService.abort();
+    this.jointCursorService.end(this.ctx);
+    this.movingJoint = this.initialHotJoint = undefined;
+  }
+  handlePointerCancel(_event: PointerEvent): void { this.cancel(); }
   handleDocumentKeyDown(event: KeyboardEvent): void {
-    // Ignore if we're in the middle of a cursor drag.
-    if (this.movingJoint || this.selectCursorService.isAnchored) {
-      return;
-    }
-    const movingJoint = this.selectedElementsService.getSelectedJoint(this.bridgeService.bridge);
-    if (!movingJoint) {
-      return;
-    }
+    if (this.movingJoint || this.selectCursorService.isAnchored) return;
+    const joint = this.selectedElementsService.getSelectedJoint(this.bridgeService.bridge);
+    if (!joint) return;
     this.hotElementService.clearRenderedHotElement(this.ctx);
-    let dx: number = 0;
-    let dy: number = 0;
+    let dx = 0, dy = 0;
     switch (event.key) {
-      case 'ArrowUp':
-        dy = DesignGrid.FINE_GRID_SIZE;
-        break;
-      case 'ArrowDown':
-        dy = -DesignGrid.FINE_GRID_SIZE;
-        break;
-      case 'ArrowRight':
-        dx = DesignGrid.FINE_GRID_SIZE;
-        break;
-      case 'ArrowLeft':
-        dx = -DesignGrid.FINE_GRID_SIZE;
-        break;
-      default:
-        return;
+      case 'ArrowUp': dy = DesignGrid.FINE_GRID_SIZE; break;
+      case 'ArrowDown': dy = -DesignGrid.FINE_GRID_SIZE; break;
+      case 'ArrowRight': dx = DesignGrid.FINE_GRID_SIZE; break;
+      case 'ArrowLeft': dx = -DesignGrid.FINE_GRID_SIZE; break;
+      default: return;
     }
-    // Search for valid point in given direction.
-    this.coordinateService.getNearbyWorldPointOnGrid(
-      this.validPoint,
-      movingJoint,
-      dx,
-      dy,
-      DesignGridService.FINEST_GRID,
-    );
-
-    // Manage the joint cursor.
+    this.coordinateService.getNearbyWorldPointOnGrid(this.validPoint, joint, dx, dy, DesignGridService.FINEST_GRID);
     if (!this.jointCursorService.visible) {
-      this.jointCursorService
-        .startAtWorldPoint(this.validPoint, { grid: DesignGridService.FINEST_GRID })
-        .show(this.ctx);
-    } else {
-      this.jointCursorService.moveToWorldPoint(this.ctx, this.validPoint);
-    }
-    this.moveJointRequest?.emit({ joint: movingJoint, newLocation: this.validPoint });
+      this.jointCursorService.startAtWorldPoint(this.validPoint, { grid: DesignGridService.FINEST_GRID }).show(this.ctx);
+    } else { this.jointCursorService.moveToWorldPoint(this.ctx, this.validPoint); }
+    this.moveJointRequest?.emit({ joint, newLocation: this.validPoint });
   }
-
-  /** If a joint is being moved via keyboard, hides the joint reticle cursor. */
   private hideKeyboardJointMoveCursor(): void {
-    if (!this.movingJoint && this.jointCursorService.visible) {
-      this.jointCursorService.clear(this.ctx);
-    }
+    if (!this.movingJoint && this.jointCursorService.visible) this.jointCursorService.clear(this.ctx);
   }
-
-  /** Changes from select to joint move if user is dragging the hot joint. */
   private maybeSwitchToJointMove(event: PointerEvent): void {
-    if (
-      (event.buttons & (1 << 0)) === 0 || // not dragging
-      this.movingJoint || // already switched
-      !this.initialHotJoint || // no hot joint at pointer down
-      !this.selectCursorService.isAnchored || // no start of rectangle
-      this.selectCursorService.diagonalSqr <= 9 // no significant pointer movement
-    ) {
-      return;
-    }
+    if ((event.buttons & 1) === 0 || this.movingJoint || !this.initialHotJoint ||
+        !this.selectCursorService.isAnchored || this.selectCursorService.diagonalSqr <= 9) return;
     this.selectCursorService.abort();
     this.movingJoint = this.initialHotJoint;
     this.elementSelectorService.selectJoint(this.movingJoint, EventOrigin.DRAFTING_PANEL);
-    this.jointCursorService
-      .start(event.offsetX, event.offsetY, { anchorJoints: this.bridgeService.findConnectedJoints(this.movingJoint) })
-      .show(this.ctx);
+    this.jointCursorService.start(event.offsetX, event.offsetY, {
+      anchorJoints: this.bridgeService.findConnectedJoints(this.movingJoint),
+    }).show(this.ctx);
   }
 }

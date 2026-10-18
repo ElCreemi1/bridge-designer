@@ -1,88 +1,51 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
-
 import { EventEmitter, Injectable } from '@angular/core';
 import { HotElementService } from './hot-element.service';
 import { Utility } from '../../../shared/classes/utility';
 
-export interface Draggable {
-  draggableService: DraggableService;
-}
-
+export interface Draggable { draggableService: DraggableService; }
 export interface DraggableService {
-  /** Signals a need to (re)render the draggable element. Start is true for the beginning of the drag.  */
   move(ctx: CanvasRenderingContext2D, draggable: any, x: number, y: number, start?: boolean): void;
-  /** Signals a need to erase the draggable element. End is true for the end of the drag.  */
   clear(ctx: CanvasRenderingContext2D, end?: boolean): void;
 }
 
-/** 
- * Logic for dragging hot draggable elements. This assumes the overlying modal handler 
- * keeps the hot element updated.
- */
 @Injectable({ providedIn: 'root' })
 export class HotElementDragService {
   private _ctx: CanvasRenderingContext2D | undefined;
   private dragging: Draggable | undefined;
+  private pointerId: number | undefined;
   private dragEndEvent: PointerEvent | null = null;
   private dragCursorActive: EventEmitter<Draggable | undefined> | undefined;
-
   constructor(private readonly hotElementService: HotElementService) {}
-
-  public initialize(
-    ctx: CanvasRenderingContext2D,
-    dragCursorActive: EventEmitter<Draggable | undefined>,
-  ): HotElementDragService {
-    this._ctx = ctx;
-    this.dragCursorActive = dragCursorActive;
-    return this;
+  public initialize(ctx: CanvasRenderingContext2D, dragCursorActive: EventEmitter<Draggable | undefined>): HotElementDragService {
+    this._ctx = ctx; this.dragCursorActive = dragCursorActive; return this;
   }
-
-  /**
-   * Returns whether something is being dragged. Optionally includes whether a
-   * given event was the one that just ended the drag and so has already been handled.
-   * Useful in modal pointer up handlers, which are invoked after this one.
-   */
-  public isDragging(event?: PointerEvent): boolean {
-    return this.dragging !== undefined || event === this.dragEndEvent;
-  }
-
+  public isDragging(event?: PointerEvent): boolean { return this.dragging !== undefined || event === this.dragEndEvent; }
   handlePointerDown(event: PointerEvent): void {
-    const hotElement = this.hotElementService.hotElement;
-    if (event.buttons !== 1 << 0 || !hotElement || !('draggableService' in hotElement)) {
-      return;
-    }
-    // Assumes test for draggableService property above means this is a Draggable.
-    const draggable = hotElement as unknown as Draggable;
+    const hot = this.hotElementService.hotElement;
+    if (event.buttons !== 1 || !hot || !('draggableService' in hot)) return;
     this.ctx.canvas.setPointerCapture(event.pointerId);
-    this.dragging = draggable;
-    draggable.draggableService.move(this.ctx, draggable, event.offsetX, event.offsetY, true);
+    this.pointerId = event.pointerId;
+    this.dragging = hot as unknown as Draggable;
+    this.dragging.draggableService.move(this.ctx, this.dragging, event.offsetX, event.offsetY, true);
     this.dragCursorActive?.emit(this.dragging);
   }
-
   handlePointerMove(event: PointerEvent): void {
-    if (!this.dragging) {
-      return;
-    }
-    this.dragging.draggableService.move(this.ctx, this.dragging, event.offsetX, event.offsetY, false);
+    if (this.dragging) this.dragging.draggableService.move(this.ctx, this.dragging, event.offsetX, event.offsetY, false);
   }
-
-  handlePointerUp(event: PointerEvent): void {
-    if (event.button !== 0 || !this.dragging) {
-      return;
-    }
-    this.ctx.canvas.releasePointerCapture(event.pointerId);
+  private finish(event: PointerEvent): void {
+    const dragging = this.dragging;
+    if (!dragging) return;
+    const id = this.pointerId;
     this.dragEndEvent = event;
     this.dragCursorActive?.emit(undefined);
-    this.dragging.draggableService.clear(this.ctx, true);
-    this.dragging = undefined;
+    dragging.draggableService.clear(this.ctx, true);
+    this.dragging = undefined; this.pointerId = undefined;
+    if (id !== undefined && this.ctx.canvas.hasPointerCapture(id)) this.ctx.canvas.releasePointerCapture(id);
   }
-
-  handlePointerLeave(): void {
-    this.hotElementService.clearRenderedHotElement(this.ctx);
-  }
-
-  private get ctx(): CanvasRenderingContext2D {
-    return Utility.assertNotUndefined(this._ctx);
-  }
+  handlePointerUp(event: PointerEvent): void { if (event.button === 0) this.finish(event); }
+  handlePointerCancel(event: PointerEvent): void { this.finish(event); }
+  handlePointerLeave(): void { this.hotElementService.clearRenderedHotElement(this.ctx); }
+  private get ctx(): CanvasRenderingContext2D { return Utility.assertNotUndefined(this._ctx); }
 }
