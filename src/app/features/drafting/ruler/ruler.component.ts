@@ -18,8 +18,9 @@ import { EventBrokerService } from '../../../shared/services/event-broker.servic
 })
 export class RulerComponent implements AfterViewInit {
   readonly thickness = 30;
-  readonly screenWidth = screen.availWidth;
-  readonly screenHeight = screen.availHeight;
+  // Cover both orientations so rotating a phone after startup does not truncate the ruler.
+  readonly screenWidth = Math.max(screen.availWidth, screen.availHeight);
+  readonly screenHeight = Math.max(screen.availWidth, screen.availHeight);
 
   @Input({ required: true }) position!: 'bottom' | 'left';
   @ViewChild('ruler') ruler!: ElementRef<HTMLCanvasElement>;

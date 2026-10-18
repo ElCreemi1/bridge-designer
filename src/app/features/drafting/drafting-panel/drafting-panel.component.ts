@@ -47,8 +47,10 @@ import { SaveMarkService } from '../../save-load/save-mark.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DraftingPanelComponent implements AfterViewInit {
-  width: number = screen.availWidth * devicePixelRatio;
-  height: number = screen.availHeight * devicePixelRatio;
+  // Fixed backing surface clipped by the wrapper; cover both orientations so rotating a phone
+  // after startup does not leave part of the panel undrawn.
+  width: number = Math.max(screen.availWidth, screen.availHeight) * devicePixelRatio;
+  height: number = Math.max(screen.availWidth, screen.availHeight) * devicePixelRatio;
   @ViewChild('wrapper') wrapper!: ElementRef<HTMLDivElement>;
   @ViewChild('draftingPanel') draftingPanel!: ElementRef<HTMLCanvasElement>;
   @ViewChild('cursorLayer') cursorLayer!: ElementRef<CursorOverlayComponent>;

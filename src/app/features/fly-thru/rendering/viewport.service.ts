@@ -23,7 +23,7 @@ export class ViewportService {
 
   /* Sets up state related to viewport using given canvas and wrapper css pixel sizes. */
   public setViewport(_canvasWidth: number, canvasHeight: number, viewportWidth: number, viewportHeight: number) {
-    if (this.width === viewportWidth && this.height === viewportHeight) {
+    if (this.width === viewportWidth && this.height === viewportHeight && this.canvasHeight === canvasHeight) {
       return;
     }
     this.width = viewportWidth;

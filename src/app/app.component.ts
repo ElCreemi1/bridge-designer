@@ -95,6 +95,7 @@ export class AppComponent implements AfterViewInit {
   @ViewChild('allowFreshStartDialog') allowFreshStartDialog!: AllowFreshStartDialogComponent;
   @ViewChild('bottomRuler') bottomRuler!: RulerComponent;
   @ViewChild('contestWelcomeDialog') contestWelcomeDialog!: ContestWelcomeDialogComponent;
+  @ViewChild('focusToggle') focusToggle?: ElementRef<HTMLButtonElement>;
   @ViewChild('draftingAreaCover') draftingAreaCover!: ElementRef<HTMLDivElement>;
   @ViewChild('leftRuler') leftRuler!: RulerComponent;
   @ViewChild('memberTable') memberTable!: MemberTableComponent;
@@ -132,7 +133,11 @@ export class AppComponent implements AfterViewInit {
     this.eventBrokerService.memberTableToggle.subscribe(info => {
       this.memberTable.visible = info.data;
     });
-    this.eventBrokerService.uiModeRequest.subscribe(info => this.showDraftingPanelCover(info.data === 'initial'));
+    this.eventBrokerService.uiModeRequest.subscribe(info => {
+      this.showDraftingPanelCover(info.data === 'initial');
+      // Keep the Focus button clear of the 3D view's bottom-row controls.
+      this.focusToggle?.nativeElement.classList.toggle('in-simulation', info.data === 'animation');
+    });
     // Let everyone know if session management is enabled. E.g. the menu checked status.
     this.sessionStateService.restoreSessionManagementEnabled();
     // Manage the welcome sequence if there is one. Separate paths for cases where we've rehydrated and not.

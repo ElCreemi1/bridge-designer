@@ -139,40 +139,6 @@ export function exitLandscapeFullscreen(): void {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
 }
 
-/** With ?diag in the URL, shows live layout measurements to help diagnose phone rendering. */
-function installDiagnostics(): void {
-  if (!new URLSearchParams(window.location.search).has('diag')) return;
-  const box = document.createElement('pre');
-  box.setAttribute('aria-hidden', 'true');
-  box.style.cssText = 'position:fixed;right:4px;bottom:4px;z-index:2147483647;margin:0;padding:4px 6px;' +
-    'max-width:60vw;background:rgba(0,0,0,.78);color:#0f0;font:10px/1.25 monospace;white-space:pre-wrap;pointer-events:none;';
-  const probe = document.createElement('div');
-  probe.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;font-size:16px;line-height:normal;width:300px;';
-  probe.textContent = 'Probe text for font scaling, long enough to be a wide block of text in the page.';
-  document.body.append(box, probe);
-  const update = () => {
-    const vv = window.visualViewport;
-    const lines = [
-      `build: touch-fit-2`,
-      `inner ${window.innerWidth}x${window.innerHeight} vv ${Math.round(vv?.width ?? 0)}x${Math.round(vv?.height ?? 0)} s${(vv?.scale ?? 1).toFixed(2)} dpr ${devicePixelRatio}`,
-      `font16→${getComputedStyle(probe).fontSize} fs=${!!document.fullscreenElement} ${screen.orientation?.type ?? ''}`,
-      `coarse=${matchMedia('(pointer: coarse)').matches} any=${matchMedia('(any-pointer: coarse)').matches} tp=${navigator.maxTouchPoints}`,
-      navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 120),
-    ];
-    document.querySelectorAll<HTMLElement>('.jqx-window').forEach(win => {
-      if (getComputedStyle(win).display === 'none') return;
-      const content = win.querySelector<HTMLElement>('.jqx-window-content');
-      const r = win.getBoundingClientRect();
-      lines.push(`dlg "${(win.querySelector('.jqx-window-header')?.textContent ?? '').trim().slice(0, 24)}" ` +
-        `${win.style.width}x${win.style.height} zoom ${getComputedStyle(win).zoom} rect ${Math.round(r.width)}x${Math.round(r.height)} ` +
-        `content ${content?.style.width}x${content?.style.height} off ${content?.offsetWidth}x${content?.offsetHeight}`);
-    });
-    box.textContent = lines.join('\n');
-  };
-  setInterval(update, 1000);
-  update();
-}
-
 /** Installs touch-only web behaviors: the touch-device marker class and dialog fitting. */
 export function installTouchWebSupport(): void {
   document.documentElement.classList.add('touch-port');
@@ -183,5 +149,4 @@ export function installTouchWebSupport(): void {
   window.visualViewport?.addEventListener('resize', scheduleFit);
   screen.orientation?.addEventListener?.('change', scheduleFit);
   scheduleFit();
-  installDiagnostics();
 }

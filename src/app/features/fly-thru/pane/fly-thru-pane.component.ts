@@ -23,8 +23,10 @@ export class FlyThruPaneComponent implements AfterViewInit {
   @HostBinding('style.display') display = 'none';
   @ViewChild('wrapper') wrapper!: ElementRef<HTMLDivElement>;
   @ViewChild('flyThruCanvas') flyThruCanvas!: ElementRef<HTMLCanvasElement>;
-  width = screen.availWidth;
-  height = screen.availHeight;
+  // The canvas is a fixed backing surface clipped by the wrapper. Cover both orientations so a
+  // phone rotated after startup is fully drawn; handleResize grows it if the pane is larger.
+  width = Math.max(screen.availWidth, screen.availHeight);
+  height = Math.max(screen.availWidth, screen.availHeight);
   loadMode: 'truck' | StaticLoadMode = 'truck';
   private activePointer: number | undefined;
   constructor(
@@ -96,6 +98,11 @@ export class FlyThruPaneComponent implements AfterViewInit {
   private handleResize(): void {
     const parent = Utility.assertNotNull(this.flyThruCanvas.nativeElement.parentElement);
     if (parent.clientWidth === 0 || parent.clientHeight === 0) return;
+    if (parent.clientWidth > this.width || parent.clientHeight > this.height) {
+      this.width = Math.max(this.width, parent.clientWidth);
+      this.height = Math.max(this.height, parent.clientHeight);
+      this.changeDetector.detectChanges();
+    }
     this.viewportService.setViewport(this.width, this.height, parent.clientWidth, parent.clientHeight);
   }
   ngAfterViewInit(): void {

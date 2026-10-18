@@ -24,6 +24,7 @@
   >{{ memberTable.display === 'block' ? 'Hide table' : 'Show table' }}</button>
   <button
     type="button"
+    #focusToggle
     class="focus-toggle"
     [attr.aria-pressed]="focusMode"
     [attr.aria-label]="focusMode ? 'Show menus, toolbars and member table' : 'Hide menus, toolbars and member table'"

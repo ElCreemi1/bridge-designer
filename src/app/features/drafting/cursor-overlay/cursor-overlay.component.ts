@@ -46,8 +46,8 @@ export const enum CursorMode {
   imports: [ContextMenuComponent],
 })
 export class CursorOverlayComponent implements AfterViewInit {
-  @Input({ transform: numberAttribute }) width: number = screen.availWidth;
-  @Input({ transform: numberAttribute }) height: number = screen.availHeight;
+  @Input({ transform: numberAttribute }) width: number = Math.max(screen.availWidth, screen.availHeight);
+  @Input({ transform: numberAttribute }) height: number = Math.max(screen.availWidth, screen.availHeight);
 
   @Output() addJointRequest = new EventEmitter<Joint>();
   @Output() addMemberRequest = new EventEmitter<Member>();

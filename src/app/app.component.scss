@@ -61,6 +61,8 @@
   background: rgba(255, 255, 255, 0.9); color: #111; font: 14px sans-serif;
   box-shadow: 0 1px 4px #0004; touch-action: manipulation; cursor: pointer;
 }
+// In the 3D view, the bottom row holds the animation controls; sit just above them.
+.focus-toggle.in-simulation { bottom: calc(max(8px, env(safe-area-inset-bottom)) + 64px); }
 @media screen and (pointer: coarse) {
   .focus-toggle { min-height: 44px; min-width: 88px; font-size: 15px; }
 }
