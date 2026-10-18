@@ -16,24 +16,35 @@ const bridge = (window as Window & {
 }).Capacitor;
 const isNativeAndroid = bridge?.isNativePlatform?.() === true && bridge?.getPlatform?.() === 'android';
 
-if (isNativeAndroid) {
-  // A previous desktop-help redirect must not become the native app's asset base.
-  if (/^\/browserinfo(?:\/|$)/.test(window.location.pathname)) {
-    window.history.replaceState(window.history.state, '', '/' + window.location.search + window.location.hash);
+// Touch devices (phones and tablets, including iOS Safari) run the experimental
+// touch port on the web as well. Like the native app, they skip the desktop-only
+// mouse, 1280x720 screen and browser-brand checks but keep genuine runtime checks.
+const isTouchPrimary = window.matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0;
+
+function bootstrap(): void {
+  bootstrapApplication(AppComponent, appConfig).catch((err: unknown) => console.error(err));
+}
+
+if (isNativeAndroid || isTouchPrimary) {
+  // A previous desktop-help redirect must not become the app's asset base.
+  const infoPath = /\/browserinfo\/?$/;
+  if (infoPath.test(window.location.pathname)) {
+    window.history.replaceState(window.history.state, '',
+      window.location.pathname.replace(infoPath, '/') + window.location.search + window.location.hash);
   }
-  // Mouse, desktop screen dimensions, and browser branding are not hardware
-  // prerequisites for the experimental touch port. Keep genuine runtime checks.
   const required = [
     'addEventListener', 'async', 'canvas', 'classList', 'localStorage',
     'querySelectorAll', 'viewportUnits', 'webgl2',
   ] as const;
   const missing = required.filter(feature => !BROWSER_FEATURES[feature]);
   if (missing.length > 0) {
-    throw new Error('Android WebView is missing required capabilities: ' + missing.join(', '));
+    const message = 'This browser is missing required capabilities: ' + missing.join(', ');
+    if (isNativeAndroid) throw new Error(message);
+    alert(message + '. Bridge Designer may not work correctly.');
   }
-  bootstrapApplication(AppComponent, appConfig).catch((err: unknown) => console.error(err));
+  bootstrap();
 } else if (areBrowserFeaturesMissing()) {
   window.location.replace('browserinfo/');
 } else {
-  bootstrapApplication(AppComponent, appConfig).catch((err: unknown) => console.error(err));
+  bootstrap();
 }
