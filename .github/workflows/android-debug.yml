@@ -13,14 +13,11 @@ on:
       - 'tsconfig*.json'
       - 'src/**'
       - 'public/**'
-
 permissions:
   contents: read
-
 concurrency:
   group: android-debug-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -30,19 +27,16 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-
       - name: Verify preinstalled Android SDK
         shell: bash
         run: |
@@ -57,22 +51,20 @@ jobs:
             fi
           done
           printf 'ANDROID_HOME=%s\nANDROID_SDK_ROOT=%s\n' "$SDK" "$SDK" >> "$GITHUB_ENV"
-
       - name: Install locked web dependencies
         run: npm ci
-
       - name: Install experimental Android packaging dependencies
         run: |
           npm install --save-exact @capacitor/core@7 @capacitor/android@7
           npm install --save-dev --save-exact @capacitor/cli@7
-
+      - name: Test center-load distribution and numerical response
+        run: npx ng test --watch=false --browsers=ChromeHeadless --include='**/center-load.spec.ts'
       - name: Compile Angular application with root-relative assets
         run: |
           npx ng build --configuration production --base-href /
           test -s dist/bridge-designer/browser/index.html
           test -s dist/bridge-designer/browser/img/splash.png
           test -s dist/bridge-designer/browser/img/loading.gif
-
       - name: Generate and synchronize Android project
         run: |
           npx cap add android
@@ -81,7 +73,6 @@ jobs:
           test -s android/app/src/main/assets/public/index.html
           test -s android/app/src/main/assets/public/img/splash.png
           test -s android/app/src/main/assets/public/img/loading.gif
-
       - name: Restrict phone activity to landscape
         shell: bash
         run: |
@@ -92,39 +83,29 @@ jobs:
           namespace = 'http://schemas.android.com/apk/res/android'
           ET.register_namespace('android', namespace)
           tree = ET.parse(path)
-          activities = [activity for activity in tree.getroot().findall('./application/activity')
-                        if activity.get('{' + namespace + '}name', '').endswith('MainActivity')]
+          activities = [a for a in tree.getroot().findall('./application/activity') if a.get('{' + namespace + '}name', '').endswith('MainActivity')]
           if len(activities) != 1:
-              raise SystemExit('Expected exactly one MainActivity; refusing to patch an unknown manifest')
+              raise SystemExit('Expected exactly one MainActivity')
           activities[0].set('{' + namespace + '}screenOrientation', 'sensorLandscape')
           tree.write(path, encoding='utf-8', xml_declaration=True)
-          verified = ET.parse(path).getroot().findall('./application/activity')
-          if not any(activity.get('{' + namespace + '}name', '').endswith('MainActivity') and
-                     activity.get('{' + namespace + '}screenOrientation') == 'sensorLandscape'
-                     for activity in verified):
+          if not any(a.get('{' + namespace + '}name', '').endswith('MainActivity') and a.get('{' + namespace + '}screenOrientation') == 'sensorLandscape' for a in ET.parse(path).getroot().findall('./application/activity')):
               raise SystemExit('Landscape orientation verification failed')
-          print('MainActivity configured for either landscape orientation')
           PY
-
       - name: Build debug APK
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
-
       - name: Collect APK and resolved dependency records
         run: |
           mkdir -p apk-artifact
           cp android/app/build/outputs/apk/debug/app-debug.apk apk-artifact/bridge-designer-touch-debug.apk
           cp package.json apk-artifact/resolved-package.json
           cp package-lock.json apk-artifact/resolved-package-lock.json
-          cp capacitor.config.json apk-artifact/
-          cp COPYING apk-artifact/
-          cp ANDROID-TOUCH.md apk-artifact/
+          cp capacitor.config.json COPYING ANDROID-TOUCH.md CENTER-LOAD.md apk-artifact/
           printf '%s\n' "$GITHUB_SHA" > apk-artifact/source-commit.txt
           cd apk-artifact
           sha256sum bridge-designer-touch-debug.apk > SHA256SUMS.txt
-
       - name: Upload experimental APK
         id: artifact
         uses: actions/upload-artifact@v4
@@ -133,21 +114,17 @@ jobs:
           path: apk-artifact/
           if-no-files-found: error
           retention-days: 14
-
       - name: Record build result
         env:
           ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
         run: |
           {
             echo '## Experimental Android debug APK'
-            echo
             echo "Source commit: $GITHUB_SHA"
             echo "Artifact: $ARTIFACT_URL"
-            echo
-            echo 'Compilation and packaging succeeded. This is not a device-tested release.'
-            echo 'MainActivity requests sensorLandscape. Touch layouts constrain the editor and dialogs to the viewport; oversized toolbars scroll horizontally.'
-            echo 'The initial drafting cover is intentionally retained until a valid design is opened or created.'
-            echo 'Gesture handling, phone layout, and file handling still require device validation.'
-            echo 'The APK uses a temporary debug signing key; a later build may require uninstalling the previous build. Export bridge files before uninstalling to avoid data loss.'
-            echo 'Resolved packaging dependency records are included in the artifact; the repository lockfile was not changed by this workflow.'
+            echo 'Focused center-load numerical tests, compilation and packaging succeeded. This is not a device-tested release.'
+            echo 'Choose Center load (2D static) in the Simulation selector. Loads are kN per modeled truss; original app dead-load factors remain. Not a real-world structural safety rating.'
+            echo 'Landscape is requested. Touch interaction and file handling still require device validation.'
+            echo 'A temporary debug signing key is used; later builds may require uninstalling. Export bridge files before uninstalling.'
+            echo 'Resolved dependency records are included; the repository lockfile was not changed by this workflow.'
           } >> "$GITHUB_STEP_SUMMARY"

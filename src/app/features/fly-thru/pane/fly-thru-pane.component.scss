@@ -1,8 +1,11 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
-
-.wrapper {
-  overflow: hidden;
-  height: 100%;
-  background-color: black;
+.wrapper { overflow:hidden; height:100%; background:black; position:relative; }
+.wrapper > canvas { position:absolute; top:0; left:0; display:block; }
+.load-mode-controls {
+  position:absolute; top:max(8px, env(safe-area-inset-top)); right:max(8px, env(safe-area-inset-right));
+  z-index:4; display:flex; align-items:center; gap:8px; padding:3px 8px;
+  border:1px solid #555; border-radius:6px; background:#fff; color:#111; font:14px sans-serif;
 }
+.load-mode-controls select { min-height:40px; max-width:230px; font:14px sans-serif; }
+.center-mode-panel { position:absolute; inset:60px 0 0; z-index:3; }

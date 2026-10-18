@@ -1,18 +1,19 @@
 <!-- Copyright (c) 2025-2026 Gene Ressler
      SPDX-License-Identifier: GPL-3.0-or-later -->
-
-<div
-  #wrapper
-  class="wrapper"
->
-  <canvas
-    #flyThruCanvas
-    [width]="width"
-    [height]="height"
-    (pointerdown)="handlePointerDown($event)"
-    (pointermove)="handlePointerMove($event)"
-    (pointerup)="handlePointerUp($event)"
-    (contextmenu)="ignore()"
-  ></canvas>
+<div #wrapper class="wrapper">
+  <canvas #flyThruCanvas [width]="width" [height]="height"
+    [style.visibility]="centerLoadMode ? 'hidden' : 'visible'"
+    (pointerdown)="handlePointerDown($event)" (pointermove)="handlePointerMove($event)"
+    (pointerup)="handlePointerUp($event)" (contextmenu)="ignore()"></canvas>
+  <div class="load-mode-controls">
+    <label for="simulation-load-mode">Simulation</label>
+    <select id="simulation-load-mode" [value]="centerLoadMode ? 'center' : 'truck'" (change)="setLoadMode($event)">
+      <option value="truck">Moving truck (3D)</option>
+      <option value="center">Center load (2D static)</option>
+    </select>
+  </div>
+  @if (centerLoadMode && display !== 'none') {
+    <center-load-panel class="center-mode-panel"></center-load-panel>
+  }
 </div>
 <fly-thru-settings-dialog></fly-thru-settings-dialog>
