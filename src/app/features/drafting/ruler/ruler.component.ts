@@ -82,6 +82,21 @@ export class RulerComponent implements AfterViewInit {
     }
   }
 
+  /**
+   * Tick label, or undefined for none. Steel sites label every coarse tick in meters. The pasta
+   * site labels multiples of 5, 10, 20 or 50 cm, whichever keeps labels readable (coarse ticks are 2.5 cm apart).
+   */
+  private label(world: number, density: DesignGridDensity): string | undefined {
+    if (density !== DesignGridDensity.COARSE) return undefined;
+    const conditions = this.bridgeService.designConditions;
+    if (!conditions.isPasta) return world.toFixed();
+    const cm = Math.round(world * conditions.displayScale * 1000) / 10;
+    // Widen the label step on small screens so labels stay at least ~28 px apart.
+    const pxPerCm = this.viewportTransform.worldToViewportDistance(1 / (100 * conditions.displayScale));
+    const step = [5, 10, 20, 50].find(s => s * pxPerCm >= 28) ?? 100;
+    return Math.abs(cm % step) < 1e-9 ? cm.toFixed() : undefined;
+  }
+
   private getTickSize(density: number): number {
     return [8, 6, 3][density] || 0;
   }
@@ -95,8 +110,9 @@ export class RulerComponent implements AfterViewInit {
     ctx.moveTo(xViewport, 0);
     ctx.lineTo(xViewport, yTick);
     ctx.stroke();
-    if (density === DesignGridDensity.COARSE) {
-      ctx.fillText(xWorld.toFixed(), xViewport, yTick + 2);
+    const label = this.label(xWorld, density);
+    if (label !== undefined) {
+      ctx.fillText(label, xViewport, yTick + 2);
     }
   }
 
@@ -109,8 +125,9 @@ export class RulerComponent implements AfterViewInit {
     ctx.moveTo(this.thickness, yViewport);
     ctx.lineTo(xTick, yViewport);
     ctx.stroke();
-    if (density === DesignGridDensity.COARSE) {
-      ctx.fillText(yWorld.toFixed(), xTick - 2, yViewport);
+    const label = this.label(yWorld, density);
+    if (label !== undefined) {
+      ctx.fillText(label, xTick - 2, yViewport);
     }
   }
 

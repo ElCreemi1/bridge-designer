@@ -8,6 +8,7 @@ import { AbutmentSide, SiteDetailRenderers, SiteRenderingHelper2D } from '../cla
 import { BridgeService } from './bridge.service';
 import { FillPatternsService as FillPatternService } from './fill-pattern.service';
 import { ViewportTransform2D } from './viewport-transform.service';
+import { renderPastaSite } from '../classes/pasta-site-rendering';
 
 @Injectable({ providedIn: 'root' })
 export class DesignSiteRenderingService implements SiteDetailRenderers {
@@ -18,6 +19,10 @@ export class DesignSiteRenderingService implements SiteDetailRenderers {
   ) {}
 
   public render(ctx: CanvasRenderingContext2D) {
+    if (this.bridgeService.designConditions.isPasta) {
+      renderPastaSite(ctx, this.bridgeService.designConditions, this.viewportTransform, this.bridgeService.siteInfo.drawingWindow);
+      return;
+    }
     this.renderDeck(ctx);
     this.renderExcavatedCrossSection(ctx);
     this.renderInSituCrossSection(ctx);

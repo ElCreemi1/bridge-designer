@@ -12,6 +12,7 @@ import { FillPatternsService } from './fill-pattern.service';
 import { DesignConditions } from './design-conditions.service';
 import { CartoonJointRenderingService } from './cartoon-joint-rendering.service';
 import { BridgeSketchModel } from '../classes/bridge-sketch.model';
+import { renderPastaSite } from '../classes/pasta-site-rendering';
 
 @Injectable({ providedIn: 'root' })
 export class CartoonSiteRenderingService {
@@ -23,6 +24,14 @@ export class CartoonSiteRenderingService {
   ) {}
 
   public render(ctx: CanvasRenderingContext2D, options: CartoonOptionMask): void {
+    const conditions = this.bridgeService.designConditions;
+    if (conditions.isPasta) {
+      renderPastaSite(ctx, conditions, this.viewportTransform, this.bridgeService.siteInfo.drawingWindow);
+      if (options & CartoonOptionMask.JOINTS) {
+        for (const joint of conditions.prescribedJoints) this.cartoonJointRenderingService.renderJoint(ctx, joint);
+      }
+      return;
+    }
     if (options & CartoonOptionMask.IN_SITU_TERRAIN) {
       this.renderInSituCrossSection(ctx, options);
     }

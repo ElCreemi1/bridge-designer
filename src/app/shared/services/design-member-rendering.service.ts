@@ -18,7 +18,6 @@ export class DesignMemberRenderingService {
   private static readonly HOT_OUTER_PALETTE = [DesignMemberRenderingService.createColors(0.3, 0), DesignMemberRenderingService.createColors(0.3, 0.9)];
   private static readonly INNER_PALETTE = [DesignMemberRenderingService.createInnerColors(0, 0), DesignMemberRenderingService.createInnerColors(0, 0.9)];
   private static readonly HOT_INNER_PALETTE = [DesignMemberRenderingService.createInnerColors(0.3, 0), DesignMemberRenderingService.createInnerColors(0.3, 0.9)];
-  private static readonly SLENDERNESS_FAIL_MARK = 'magenta';
   private readonly lineWidths: { outer: number; inner: number }[];
   private readonly pointA = new Point2D();
   private readonly pointB = new Point2D();
@@ -43,11 +42,11 @@ export class DesignMemberRenderingService {
       eventBrokerService.draftingPanelInvalidation.next({ origin: EventOrigin.SERVICE, data: 'graphic' });
     });
   }
-  public render(ctx: CanvasRenderingContext2D, member: Member, selected: boolean, marked: boolean): void {
-    this.renderInternal(ctx, member, selected, marked, DesignMemberRenderingService.OUTER_PALETTE, DesignMemberRenderingService.INNER_PALETTE);
+  public render(ctx: CanvasRenderingContext2D, member: Member, selected: boolean, mark: string | undefined): void {
+    this.renderInternal(ctx, member, selected, mark, DesignMemberRenderingService.OUTER_PALETTE, DesignMemberRenderingService.INNER_PALETTE);
   }
-  public renderHot(ctx: CanvasRenderingContext2D, member: Member, selected: boolean, marked: boolean): void {
-    this.renderInternal(ctx, member, selected, marked, DesignMemberRenderingService.HOT_OUTER_PALETTE, DesignMemberRenderingService.HOT_INNER_PALETTE);
+  public renderHot(ctx: CanvasRenderingContext2D, member: Member, selected: boolean, mark: string | undefined): void {
+    this.renderInternal(ctx, member, selected, mark, DesignMemberRenderingService.HOT_OUTER_PALETTE, DesignMemberRenderingService.HOT_INNER_PALETTE);
   }
   public clear(ctx: CanvasRenderingContext2D, member: Member): void {
     this.viewportTransform.worldToViewportPoint(this.pointA, member.a);
@@ -85,12 +84,12 @@ export class DesignMemberRenderingService {
     if (member.compressionForceStrengthRatio > 1) return Failure.COMPRESSION;
     return Failure.NONE;
   }
-  private renderInternal(ctx: CanvasRenderingContext2D, member: Member, selected: boolean, marked: boolean, outerPalette: string[][][], innerPalette: string[][][]): void {
+  private renderInternal(ctx: CanvasRenderingContext2D, member: Member, selected: boolean, mark: string | undefined, outerPalette: string[][][], innerPalette: string[][][]): void {
     const failure = this.getFailure(member);
     const outer = outerPalette[+selected][failure][member.material.index];
     const inner = member.shape.section.shortName === 'Tube' ? innerPalette[+selected][failure][member.shape.section.index] : undefined;
     this.renderInWorldCoords(ctx, member.a, member.b, member.shape.sizeIndex, outer, inner,
-      marked ? DesignMemberRenderingService.SLENDERNESS_FAIL_MARK : undefined,
+      mark,
       this.showMemberNumbers || selected ? member.number : undefined);
   }
   private renderInWorldCoords(ctx: CanvasRenderingContext2D, a: Point2DInterface, b: Point2DInterface, size: number, color: string, inner?: string, mark?: string, number?: number): void {

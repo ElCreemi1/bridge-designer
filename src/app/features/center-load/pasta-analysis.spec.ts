@@ -1,6 +1,6 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
-import { analyzePasta, DEFAULT_PASTA_PROPERTIES, optimizeStrands, PastaInput, PastaProperties } from './pasta-analysis';
+import { analyzePasta, DEFAULT_PASTA_PROPERTIES, optimizeStrands, overLengthMembers, PastaInput, PastaProperties } from './pasta-analysis';
 
 const supports = {
   loadedJointCount: 3, isPier: false, isHiPier: false, pierJointIndex: -1, isArch: false, archJointIndex: -1,
@@ -143,6 +143,27 @@ describe('pasta analysis', () => {
     });
     it('rejects a budget below one strand per member', () => {
       expect(() => optimizeStrands(base, { massBudgetKg: oneStrandMass / 2, maxStrandsPerMember: 10 })).toThrowError(/budget/);
+    });
+  });
+
+  describe('strand length limit', () => {
+    it('reports member lengths at the 1.00 m scale', () => {
+      const r = analyzePasta(input(0));
+      // 4 m chords and post, 4*sqrt(2) m diagonals, drawn on an 8 m span.
+      [0.5, 0.5, Math.SQRT1_2, Math.SQRT1_2, 0.5].forEach((l, i) => expect(r.memberLengthsM[i]).toBeCloseTo(l, 12));
+    });
+    it('lists only members longer than one strand', () => {
+      const r = analyzePasta(input(0));
+      expect(overLengthMembers(r, 0.6).map(o => o.index)).toEqual([2, 3]);
+      expect(overLengthMembers(r, 0.5).map(o => o.index)).toEqual([2, 3]); // Exactly 0.5 m is allowed.
+      expect(overLengthMembers(r, 0.75).length).toBe(0);
+    });
+    it('stops the optimizer while any member is too long', () => {
+      const base = input(0, { diameterM: 3e-3 });
+      const mass = analyzePasta(base).massKg;
+      expect(() => optimizeStrands(base, { massBudgetKg: 3 * mass, maxStrandsPerMember: 10, maxStrandLengthM: 0.6 }))
+        .toThrowError(/M3, M4/);
+      expect(() => optimizeStrands(base, { massBudgetKg: 3 * mass, maxStrandsPerMember: 10, maxStrandLengthM: 0.75 })).not.toThrow();
     });
   });
 });

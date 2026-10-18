@@ -20,6 +20,15 @@ A private AnalysisService instance with unit axle parameters gives single-joint 
 
 `pasta-analysis.ts` is a separate direct-stiffness 2D truss solver in SI units. Supports mirror the app solver's restraint rules (including piers, arches and anchorages). Inputs: diameter, elastic modulus, tensile strength, compressive strength and density. Defaults are placeholders, not measured data. Each member's self-weight is split equally to its end joints. Tension capacity is A*ft; compression capacity is the smaller of A*fc and pinned-end Euler buckling pi^2*E*I/L^2. The panel also reports pasta mass, strand length and the linear force at which the first member reaches capacity.
 
+### Pasta site (1.00 m)
+
+The setup wizard's step 2 offers "Pasta bridge (1.00 m span)". It is a separate design type (scenario code 5101220000, tag 02P): load-case digit 5 on the 10-panel geometry of site 02, so the 40 m world deck span represents exactly 1.00 m (one world meter = 2.5 cm). Grid snapping, templates and drawing tools are reused unchanged. What changes on this site:
+
+- Drawing: two tables with a pin support on the left and a roller on the right, a dashed deck line, and only the design space (30 cm above to 50 cm below the deck) plus a 7.5 cm margin. No river valley, road labels, or steel slenderness marks.
+- Rulers in centimeters; member table lengths in cm. Slenderness and steel force/strength columns show dashes. The toolbar shows total strand length instead of steel cost. The status icon reports stability only.
+- The 3D view opens in the Pasta simulation and hides terrain, abutments and the wind turbine.
+- Strand length limit: members longer than one strand (default 25 cm, editable under Strand properties, remembered on the device) are drawn with a red dashed mark and a red length cell. The pasta panel lists them on any site at 1.00 m scale, and the optimizer refuses to run until they are shortened.
+
 ### Strand bundles and optimizer
 
 Each member can hold a whole number of strands (default 1). Strands are loose: joined only at the joints and not bonded along their length, so each strand buckles independently. A bundle of n strands has n times the area, axial stiffness, weight, tensile capacity and compressive capacity of one strand (n*A*ft and n*min(A*fc, pi^2*E*I/L^2)). Gluing strands along their length would raise buckling capacity toward n^2 times one strand's bending stiffness; that is deliberately not modeled.
@@ -34,4 +43,4 @@ Both static modes are linear-elastic, small-deflection explorations, not safety 
 
 ## Automated checks
 
-The APK workflow runs `src/app/features/center-load/*.spec.ts` and the fly-thru specs before packaging. Pasta tests cover loose-bundle scaling, the strand optimizer (budget, member limit, no removable strands, beating uniform bundles, rescuing a self-weight failure), 1.00 m scaling, statics of a reference truss, virtual-work deflection, self-weight, buckling versus crushing, the first-failure load, invalid input and instability.
+The APK workflow runs `src/app/features/center-load/*.spec.ts` and the fly-thru specs before packaging. Pasta tests cover the pasta site (validity, scale, saved code, steel sites unchanged, drawing window), the strand length limit, loose-bundle scaling, the strand optimizer (budget, member limit, no removable strands, beating uniform bundles, rescuing a self-weight failure), 1.00 m scaling, statics of a reference truss, virtual-work deflection, self-weight, buckling versus crushing, the first-failure load, invalid input and instability.

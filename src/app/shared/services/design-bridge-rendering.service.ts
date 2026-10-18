@@ -27,7 +27,7 @@ export class DesignBridgeRenderingService {
         ctx,
         member,
         this.elementSelectionService.isMemberSelected(member),
-        !this.bridgeService.isMemberPassingSlendernessCheck(member),
+        this.bridgeService.getMemberMark(member),
       ),
     );
     bridge.joints.forEach(joint =>

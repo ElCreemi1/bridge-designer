@@ -72,6 +72,14 @@ const EXCAVATION_VOLUMES = [106500, 90000, 71500, 54100, 38100, 19400, 0];
 const PIER_HEIGHT_COSTS = [0, 2800, 5600, 8400, 10200, 12500, 14800];
 
 const FROM_KEY_CODE_TAG = '99Z';
+
+/**
+ * Pasta site: load-case digit 5 on the 10-panel, 12 m over, 20 m under geometry of site 02.
+ * The 40 m world deck span represents a 1.00 m pasta span, so one world meter is 2.5 cm.
+ */
+export const PASTA_CODE_LONG = 5101220000;
+export const PASTA_TAG = '02P';
+const PASTA_LOAD_CASE = 5;
 const MIN_OVERHEAD = 8;
 const MAX_SLENDERNESS = 300;
 
@@ -238,7 +246,9 @@ export class DesignConditions {
     }
 
     // Slenderness limit.
-    this.allowableSlenderness = isLeftCable || isRightCable ? Number.POSITIVE_INFINITY : MAX_SLENDERNESS;
+    // Steel slenderness does not apply to pasta; strand length is checked instead.
+    this.allowableSlenderness =
+      isLeftCable || isRightCable || code[0] === PASTA_LOAD_CASE ? Number.POSITIVE_INFINITY : MAX_SLENDERNESS;
 
     // Cost calculations.
     this.excavationVolume = DesignConditions.getExcavationVolume(this.deckElevation);
@@ -376,6 +386,16 @@ export class DesignConditions {
     return this.tag === FROM_KEY_CODE_TAG;
   }
 
+  /** Whether this is the 1.00 m pasta site. */
+  public get isPasta(): boolean {
+    return this.code[0] === PASTA_LOAD_CASE;
+  }
+
+  /** Real meters per world meter: 1.00 m / world deck span for pasta, 1 otherwise. */
+  public get displayScale(): number {
+    return this.isPasta ? 1 / this.spanLength : 1;
+  }
+
   public isGeometricallyIdentical(other: DesignConditions): boolean {
     // code[0] is load condition; the rest are geometry.
     return this.code.slice(1).every((value, index) => value === other.code[index]);
@@ -421,7 +441,13 @@ export class DesignConditions {
       return CodeError.MISSING;
     }
     // Character 1 - Load case scenario (1=Case A, 2=Case B, 3=Case C, 4=Case D); entry of any character other than 1, 2, 3, or 4 is illegal.
-    if (!Utility.inRange(code[1 - 1], 1, 4)) {
+    // Pasta (5) is allowed only with its fixed geometry.
+    if (code[0] === PASTA_LOAD_CASE) {
+      const pasta = this.getCode(PASTA_CODE_LONG)!;
+      if (!code.every((digit, i) => digit === pasta[i])) {
+        return CodeError.NO_SUCH_LOAD_CASE;
+      }
+    } else if (!Utility.inRange(code[1 - 1], 1, 4)) {
       return CodeError.NO_SUCH_LOAD_CASE;
     }
     // Characters 2,3 - Span length, expressed as the number of 4-meter panels; any integer from 1 to 20 is allowed
@@ -571,6 +597,8 @@ export class DesignConditionsService {
   private readonly standardConditionsBySetupKey: Map<string, DesignConditions>;
   private readonly standardConditionsFromCode: Map<number, DesignConditions>;
   private readonly standardConditionsFromTag: Map<string, DesignConditions>;
+  /** The single pasta site; kept out of the standard tables so setup keys and tag search are unchanged. */
+  public readonly pastaConditions: DesignConditions;
 
   constructor(private readonly contestParametersService: ContestParametersService) {
     this.standardConditions = //#region data for standard conditions
@@ -972,6 +1000,12 @@ export class DesignConditionsService {
         ] as [string, number][]
       ).map(p => DesignConditions.fromTaggedCodeLong(...p, contestParametersService.parameters));
 
+    this.pastaConditions = DesignConditions.fromTaggedCodeLong(
+      PASTA_TAG,
+      PASTA_CODE_LONG,
+      contestParametersService.parameters,
+    );
+
     this.standardConditionsBySetupKey = this.standardConditions.reduce((map, conditions) => {
       map.set(conditions.setupKey, conditions);
       return map;
@@ -998,6 +1032,9 @@ export class DesignConditionsService {
    * if code is invalid.
    */
   public getConditionsForCodeLong(code: number): DesignConditions | undefined {
+    if (code === PASTA_CODE_LONG) {
+      return this.pastaConditions;
+    }
     const tagConditions = this.standardConditionsFromCode.get(code);
     if (tagConditions) {
       return tagConditions;

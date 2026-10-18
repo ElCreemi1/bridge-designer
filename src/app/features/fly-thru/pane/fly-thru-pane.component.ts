@@ -13,6 +13,7 @@ import { TextureService } from '../rendering/texture.service';
 import { StaticLoadMode, StaticLoadPanelComponent } from '../../center-load/static-load-panel.component';
 import { SimulationStateService } from '../rendering/simulation-state.service';
 import { RenderingService } from '../rendering/rendering.service';
+import { BridgeService } from '../../../shared/services/bridge.service';
 
 @Component({
   selector: 'fly-thru-pane', imports: [FlyThruSettingsDialogComponent, StaticLoadPanelComponent],
@@ -40,11 +41,14 @@ export class FlyThruPaneComponent implements AfterViewInit {
     private readonly viewportService: ViewportService,
     private readonly simulationStateService: SimulationStateService,
     private readonly renderingService: RenderingService,
+    private readonly bridgeService: BridgeService,
   ) {}
   setLoadMode(event: Event): void {
     this.finishPointer();
     const value = (event.target as HTMLSelectElement).value;
-    const next = value === 'center' || value === 'pasta' ? value : 'truck';
+    this.applyLoadMode(value === 'center' || value === 'pasta' ? value : 'truck');
+  }
+  private applyLoadMode(next: 'truck' | StaticLoadMode): void {
     if (next === this.loadMode) return;
     const wasTruck = this.loadMode === 'truck';
     this.loadMode = next;
@@ -94,6 +98,8 @@ export class FlyThruPaneComponent implements AfterViewInit {
     if (!value) this.finishPointer();
     this.display = value ? 'block' : 'none'; this.changeDetector.detectChanges();
     if (value) this.animationService.start(); else this.animationService.stop();
+    // The pasta site opens in the pasta simulation; the truck is still available in the list.
+    if (value && this.loadMode === 'truck' && this.bridgeService.designConditions.isPasta) this.applyLoadMode('pasta');
   }
   private handleResize(): void {
     const parent = Utility.assertNotNull(this.flyThruCanvas.nativeElement.parentElement);

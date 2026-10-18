@@ -1,6 +1,7 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
 
+import { PastaSettingsService } from '../../../shared/services/pasta-settings.service';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -69,6 +70,7 @@ export class DraftingPanelComponent implements AfterViewInit {
     private readonly selectedElementsService: SelectedElementsService,
     private readonly undoManagerService: UndoManagerService,
     private readonly viewportTransform: ViewportTransform2D,
+    private readonly pastaSettingsService: PastaSettingsService,
   ) {}
 
   private get ctx(): CanvasRenderingContext2D {
@@ -238,6 +240,7 @@ export class DraftingPanelComponent implements AfterViewInit {
     new ResizeObserver(() => this.handleResize()).observe(this.wrapper.nativeElement);
     this.eventBrokerService.deleteSelectionRequest.subscribe(() => this.handleDeleteSelectionRequest());
     this.eventBrokerService.draftingPanelInvalidation.subscribe(() => this.render());
+    this.pastaSettingsService.maxStrandLengthChange.subscribe(() => this.render());
     this.eventBrokerService.gridDensitySelection.subscribe(info => this.handleSelectGridDensity(info.data));
     this.eventBrokerService.loadBridgeRequest.subscribe(info => this.loadBridge(info.data));
     this.eventBrokerService.attachSketchRequest.subscribe(info => this.loadSketch(info.data));

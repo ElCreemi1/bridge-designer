@@ -151,8 +151,7 @@ export class HotElementService {
     } else if (element instanceof Member) {
       const member: Member = element;
       const isSelected = this.elementSelectionService.isMemberSelected(member);
-      const isTooSlender = !this.bridgeService.isMemberPassingSlendernessCheck(member);
-      this.designMemberRenderingService.renderHot(ctx, member, isSelected, isTooSlender);
+      this.designMemberRenderingService.renderHot(ctx, member, isSelected, this.bridgeService.getMemberMark(member));
       this.designJointRenderingService.render(ctx, member.a, this.elementSelectionService.isJointSelected(member.a));
       this.designJointRenderingService.render(ctx, member.b, this.elementSelectionService.isJointSelected(member.b));
     }

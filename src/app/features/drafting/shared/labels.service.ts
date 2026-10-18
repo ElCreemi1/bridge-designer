@@ -48,6 +48,11 @@ export class LabelsService implements DraggableService {
     const savedTextBaseline = ctx.textBaseline;
 
     const conditions = this.bridgeService.designConditions;
+    if (conditions.isPasta) {
+      // The pasta site has no beam, deck slab or road to label.
+      this.labelsTextExtent.makeEmpty();
+      return this;
+    }
 
     ctx.textBaseline = 'middle';
     const beamLabelMetrics = ctx.measureText(LabelsService.BEAM_LABEL_TEXT);
@@ -108,6 +113,7 @@ export class LabelsService implements DraggableService {
 
   /** Returns canonical labels token if the given coordinate is hot, else undefined. */
   public getHotLabels(x: number, y: number): Labels | undefined {
+    if (this.bridgeService.designConditions.isPasta) return undefined;
     return this.labelsTextExtent.contains(x, y) ? this.labels : undefined;
   }
 

@@ -117,6 +117,9 @@ export class SetupWizardComponent implements AfterViewInit, SetupWizardCardView 
   @ViewChild('highStrengthConcreteButton') highStrengthConcreteButton!: jqxRadioButtonComponent;
   @ViewChild('isPierButton') isPierButton!: jqxRadioButtonComponent;
   @ViewChild('localContestCodeInput') localContestCodeInput!: LocalContestCodeInputComponent;
+  @ViewChild('noContestRadio') noContestRadio!: jqxRadioButtonComponent;
+  @ViewChild('pastaRadio') pastaRadio!: jqxRadioButtonComponent;
+  isPastaSelected: boolean = false;
   @ViewChild('mediumStrengthConcreteButton') mediumStrengthConcreteButton!: jqxRadioButtonComponent;
   @ViewChild('nextButton') nextButton!: jqxButtonComponent;
   @ViewChild('noAnchoragesButton') noAnchoragesButton!: jqxRadioButtonComponent;
@@ -329,6 +332,17 @@ export class SetupWizardComponent implements AfterViewInit, SetupWizardCardView 
     this.cardService.card.enableControls(); // Next button
   }
 
+  handlePastaRadioChange(event: any): void {
+    this.isPastaSelected = !!event.args.checked;
+    if (this.isPastaSelected) {
+      this.designConditions = this.designConditionsService.pastaConditions;
+      this.cardService.renderCard();
+    } else if (this.designConditions.isPasta) {
+      this.setDesignConditionsFromWidgets();
+    }
+    this.cardService.card.enableControls();
+  }
+
   handleNextButtonClick(): void {
     // If user has entered valid local contest code, set associated design conditions.
     const card = this.cardService.card;
@@ -368,6 +382,15 @@ export class SetupWizardComponent implements AfterViewInit, SetupWizardCardView 
     }
     this.designConditions = conditions;
     this.setWidgetsFromDesignConditions();
+    // Reflect the pasta site in the card 2 choice; its change handler keeps conditions in sync.
+    if (conditions.isPasta) {
+      this.pastaRadio.check();
+      this.isPastaSelected = true;
+      this.designConditions = conditions;
+    } else if (this.isPastaSelected) {
+      this.noContestRadio.check();
+      this.isPastaSelected = false;
+    }
     this.bridgeService.bridge.projectName = this.rootBridgeService.instance.bridge.projectName;
     this.bridgeService.bridge.designedBy = this.rootBridgeService.instance.bridge.designedBy;
     this.bridgeService.bridge.projectId = this.rootBridgeService.instance.bridge.projectId;

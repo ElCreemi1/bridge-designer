@@ -25,6 +25,8 @@ export class SiteConstants {
   static readonly DECK_HALF_WIDTH: number = 5.0;
   static readonly DECK_TOP_HEIGHT: number = 0.8;
   static readonly DRAWING_X_MARGIN: number = 3;
+  /** Margin around the pasta design space, world meters (3 = 7.5 cm at pasta scale). */
+  static readonly PASTA_MARGIN: number = 3;
   /** Coordinate value "off the drawing," where reasonable views are certainly clipped. */
   static readonly FAR_AWAY: number = 100.0;
   static readonly GAP_DEPTH = 24;

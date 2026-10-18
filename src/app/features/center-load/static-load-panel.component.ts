@@ -6,7 +6,8 @@ import { BridgeService } from '../../shared/services/bridge.service';
 import { EventBrokerService } from '../../shared/services/event-broker.service';
 import { SimulationStateService } from '../fly-thru/rendering/simulation-state.service';
 import { CenterLoadAnalysisService } from './center-load-analysis.service';
-import { analyzePasta, DEFAULT_PASTA_PROPERTIES, optimizeStrands, PastaProperties, PastaResult } from './pasta-analysis';
+import { analyzePasta, DEFAULT_PASTA_PROPERTIES, optimizeStrands, overLengthMembers, PastaProperties, PastaResult } from './pasta-analysis';
+import { PastaSettingsService } from '../../shared/services/pasta-settings.service';
 
 export type StaticLoadMode = 'center' | 'pasta';
 
@@ -38,17 +39,21 @@ export type StaticLoadMode = 'center' | 'pasta';
             <label>Compressive strength (MPa)<input type="number" min="0.1" step="0.5" [value]="props.compressiveStrengthPa / 1e6" (change)="setProp('compressiveStrengthPa', $event, 1e6)" /></label>
             <label>Density (kg/m&sup3;)<input type="number" min="1" step="10" [value]="props.densityKgM3" (change)="setProp('densityKgM3', $event, 1)" /></label>
           </div>
+          <label>Longest strand (cm)<input type="number" min="1" max="200" step="0.5" [value]="maxStrandLengthCm" (change)="setMaxStrandLength($event)" /></label>
           <button type="button" (click)="resetProps()">Reset to starting values</button>
           <p class="note">Starting values are placeholders, not measured data. Pasta varies by brand and humidity; enter values you have measured.</p>
         </details>
+        @if (overLength.length) {
+          <p class="summary warning">{{ overLength.length }} member(s) longer than one {{ maxStrandLengthCm }} cm strand: {{ overLengthText }}. The optimizer will not run until they are shortened.</p>
+        }
         <details>
           <summary>Strands per member ({{ pastaTotalStrands }} total)</summary>
           <p class="note">Loose strands joined only at the joints: each strand buckles on its own, so n strands carry n times one strand.</p>
           <div class="strand-list">
             @for (row of strandRows; track row.index) {
-              <div class="strand-row" [class.governing]="row.governing">
+              <div class="strand-row" [class.governing]="row.governing" [class.over-length]="row.overLength">
                 <span class="member-label">M{{ row.index + 1 }}</span>
-                <span class="member-state">{{ row.state }}</span>
+                <span class="member-state">{{ row.lengthCm }} cm, {{ row.state }}</span>
                 <button type="button" aria-label="Remove a strand" [disabled]="row.count <= 1" (click)="changeStrands(row.index, -1)">&minus;</button>
                 <span class="count">{{ row.count }}</span>
                 <button type="button" aria-label="Add a strand" (click)="changeStrands(row.index, 1)">+</button>
@@ -77,7 +82,7 @@ export type StaticLoadMode = 'center' | 'pasta';
         @if (mode === 'center') {
           <p>One stationary vertical force at the deck midpoint on one modeled truss. A midpoint between deck joints transfers through a simply supported deck panel. Original steel members and factored dead loads are retained; 0 kN means dead load only. No truck or impact factor is added.</p>
         } @else {
-          <p>The drawing is scaled so the deck span is exactly 1.00 m. Each drawn member is a bundle of loose solid circular strands (one by default) joined only at the joints; steel sizes are ignored. Loads are strand self-weight plus the center force; no deck, truck or highway factors. Tension is checked against tensile strength; compression against the smaller of crushing and pinned-end Euler buckling, &pi;&sup2;EI/L&sup2;, for each strand separately. Gluing strands together along their length would raise buckling capacity; that is not modeled.</p>
+          <p>The drawing is scaled so the deck span is exactly 1.00 m (on the pasta site it already is). Members longer than one strand at that scale are flagged. Each drawn member is a bundle of loose solid circular strands (one by default) joined only at the joints; steel sizes are ignored. Loads are strand self-weight plus the center force; no deck, truck or highway factors. Tension is checked against tensile strength; compression against the smaller of crushing and pinned-end Euler buckling, &pi;&sup2;EI/L&sup2;, for each strand separately. Gluing strands together along their length would raise buckling capacity; that is not modeled.</p>
           <p>This is one planar truss shown in 3D. It does not analyze lateral bracing, twisting, out-of-plane buckling or glue joints.</p>
         }
         <p>Linear-elastic small-deflection model for exploration, not a safety rating. Results past capacity are warnings; the collapsed shape is not predicted.</p>
@@ -103,6 +108,7 @@ export type StaticLoadMode = 'center' | 'pasta';
     .strand-row { display:grid; grid-template-columns:42px 1fr 36px 30px 36px; align-items:center; gap:4px; padding:2px 4px; }
     .strand-row:nth-child(odd) { background:#f3f3f3; }
     .strand-row.governing { background:#ffe3d9; font-weight:600; }
+    .strand-row.over-length .member-label, .strand-row.over-length .member-state { color:#c00000; font-weight:600; }
     .strand-row button { min-height:32px; margin:0; padding:0; font-size:18px; }
     .strand-row .count { text-align:center; }
     .member-state { font-size:11px; color:#444; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -117,7 +123,9 @@ export class StaticLoadPanelComponent implements AfterViewInit, OnChanges, OnDes
   props: PastaProperties = { ...DEFAULT_PASTA_PROPERTIES };
   /** Strands per member for pasta mode; reset when the member count changes. */
   strandCounts: number[] = [];
-  strandRows: { index: number; count: number; state: string; governing: boolean }[] = [];
+  strandRows: { index: number; count: number; state: string; governing: boolean; lengthCm: string; overLength: boolean }[] = [];
+  overLength: { index: number; lengthM: number }[] = [];
+  overLengthText = '';
   pastaTotalStrands = 0;
   massBudgetG = 0;
   maxStrandsPerMember = 20;
@@ -136,6 +144,7 @@ export class StaticLoadPanelComponent implements AfterViewInit, OnChanges, OnDes
     private readonly broker: EventBrokerService,
     private readonly simulationState: SimulationStateService,
     private readonly changeDetector: ChangeDetectorRef,
+    private readonly pastaSettings: PastaSettingsService,
   ) {}
 
   setCenterForce(event: Event): void {
@@ -155,6 +164,13 @@ export class StaticLoadPanelComponent implements AfterViewInit, OnChanges, OnDes
     const value = (event.target as HTMLInputElement).valueAsNumber;
     if (!Number.isFinite(value) || value <= 0) return;
     this.props = { ...this.props, [key]: value * unit };
+    this.schedule();
+  }
+  get maxStrandLengthCm(): number { return Math.round(this.pastaSettings.maxStrandLengthM * 1000) / 10; }
+  setMaxStrandLength(event: Event): void {
+    const value = (event.target as HTMLInputElement).valueAsNumber / 100;
+    if (PastaSettingsService.isValidLength(value)) this.pastaSettings.maxStrandLengthM = value;
+    this.optimizerMessage = '';
     this.schedule();
   }
   resetProps(): void { this.props = { ...DEFAULT_PASTA_PROPERTIES }; this.schedule(); }
@@ -180,6 +196,7 @@ export class StaticLoadPanelComponent implements AfterViewInit, OnChanges, OnDes
       const started = performance.now();
       const { strandCounts, result, evaluations } = optimizeStrands(this.pastaInput(), {
         massBudgetKg: this.massBudgetG / 1000, maxStrandsPerMember: this.maxStrandsPerMember,
+        maxStrandLengthM: this.pastaSettings.maxStrandLengthM,
       });
       this.strandCounts = Array.from(strandCounts);
       const describe = (r: PastaResult) => Number.isNaN(r.firstFailureForceN) ? 'fails under its own weight'
@@ -269,8 +286,12 @@ export class StaticLoadPanelComponent implements AfterViewInit, OnChanges, OnDes
     for (let i = 0; i < r.memberFailureForceN.length; i++) {
       if (governing < 0 || r.memberFailureForceN[i] < r.memberFailureForceN[governing]) governing = i;
     }
+    this.overLength = overLengthMembers(r, this.pastaSettings.maxStrandLengthM);
+    const overSet = new Set(this.overLength.map(o => o.index));
+    this.overLengthText = this.overLength.map(o => `M${o.index + 1} (${(o.lengthM * 100).toFixed(1)} cm)`).join(', ');
     this.strandRows = this.strandCounts.map((count, index) => ({
       index, count, governing: index === governing,
+      lengthCm: (r.memberLengthsM[index] * 100).toFixed(1), overLength: overSet.has(index),
       state: `${r.memberForces[index] >= 0 ? 'tension' : r.bucklingGoverns[index] ? 'buckling' : 'crushing'} ${(Math.abs(r.signedRatios[index]) * 100).toFixed(0)}%`,
     }));
     // Displacements of the 1.00 m model mapped back to drawing scale, then exaggerated.

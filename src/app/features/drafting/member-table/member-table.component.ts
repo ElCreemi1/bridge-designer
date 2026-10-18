@@ -3,6 +3,7 @@
 
 import { AfterViewInit, ChangeDetectionStrategy, Component, HostBinding, ViewChild } from '@angular/core';
 import { jqxGridComponent, jqxGridModule } from 'jqwidgets-ng/jqxgrid';
+import { PastaSettingsService } from '../../../shared/services/pasta-settings.service';
 import { BridgeService } from '../../../shared/services/bridge.service';
 import { EventBrokerService, EventOrigin } from '../../../shared/services/event-broker.service';
 import { EditEffect } from '../../../shared/classes/editing';
@@ -64,7 +65,8 @@ export class MemberTableComponent implements AfterViewInit {
       cellsalign: 'right', 
       cellsformat: 'f2',
       width: 48, 
-      renderer: MemberTableComponent.renderHeader
+      renderer: MemberTableComponent.renderHeader,
+      cellsrenderer: this.renderLength.bind(this),
     }, {
       text: 'Slender- ness', 
       datafield: 'slenderness',
@@ -115,6 +117,7 @@ export class MemberTableComponent implements AfterViewInit {
     elementSelectorService: ElementSelectorService,
     private readonly eventBrokerService: EventBrokerService,
     private readonly selectedElementsService: SelectedElementsService,
+    private readonly pastaSettingsService: PastaSettingsService,
   ) {
     this.source.localdata = bridgeService.bridge.members;
     this.dataAdapter = new jqx.dataAdapter(this.source);
@@ -158,7 +161,27 @@ export class MemberTableComponent implements AfterViewInit {
     return this.renderAnalysisCell(value, defaultHtml!, 'rgb(150,150,255)');
   }
 
+  private static dash(defaultHtml: string): string {
+    return defaultHtml.replace(/>[^<]*<\/div>\s*$/, '>—</div>');
+  }
+
+  /** Pasta site: length in cm, red when longer than one strand. Steel sites: unchanged meters. */
+  private renderLength(_row?: number, _columnField?: string, value?: any, defaultHtml?: string): string {
+    const conditions = this.bridgeService.designConditions;
+    if (!conditions.isPasta || typeof value !== 'number') return defaultHtml!;
+    const pastaLengthM = value / conditions.spanLength;
+    let html = defaultHtml!.replace(/>[^<]*<\/div>\s*$/, `>${(pastaLengthM * 100).toFixed(1)}</div>`);
+    if (this.pastaSettingsService.isOverLength(pastaLengthM)) {
+      html = html.replace(
+        MemberTableComponent.STYLE_MATCH,
+        'style="padding: 4.5px 8px 3px 0;margin: 0 -4px -1px 0;background-color: #ff6b6b;',
+      );
+    }
+    return html;
+  }
+
   private renderSlenderness(_row?: number, _columnField?: string, value?: any, defaultHtml?: string): string {
+    if (this.bridgeService.designConditions.isPasta) return MemberTableComponent.dash(defaultHtml!);
     return value <= this.bridgeService.designConditions.allowableSlenderness
       ? defaultHtml!
       : defaultHtml!.replace(
@@ -168,6 +191,8 @@ export class MemberTableComponent implements AfterViewInit {
   }
 
   private renderAnalysisCell(value: any, defaultHtml: string, backgroundColor: string) {
+    // Steel slenderness and force/strength ratios do not apply to pasta; see the Pasta simulation.
+    if (this.bridgeService.designConditions.isPasta) return MemberTableComponent.dash(defaultHtml);
     const html = defaultHtml.replace('></div>', '>—</div>');
     if (value <= 1 && this.analysisValidityService.isLastAnalysisValid) {
       return html;
@@ -187,6 +212,10 @@ export class MemberTableComponent implements AfterViewInit {
   }
 
   private updateGridContent(): void {
+    const lengthHeader = this.bridgeService.designConditions.isPasta ? 'Length (cm)' : 'Length (m)';
+    if (this.grid.getcolumnproperty('lengthM', 'text') !== lengthHeader) {
+      this.grid.setcolumnproperty('lengthM', 'text', lengthHeader);
+    }
     this.isLastAnalysisValid = this.analysisValidityService.isLastAnalysisValid;
     this.source.localdata = this.bridgeService.bridge.members;
     // Preserve scroll position and user-selected sort columns through bound data update, which loses them.
@@ -213,7 +242,8 @@ export class MemberTableComponent implements AfterViewInit {
     merge(
       this.eventBrokerService.analysisCompletion,
       this.eventBrokerService.loadBridgeCompletion,
-      this.eventBrokerService.sessionStateRestoreCompletion
+      this.eventBrokerService.sessionStateRestoreCompletion,
+      this.pastaSettingsService.maxStrandLengthChange,
     ).subscribe(() => this.updateGridContent());
     this.eventBrokerService.editCommandCompletion.subscribe(info => {
       if (

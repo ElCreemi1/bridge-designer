@@ -4,6 +4,7 @@
 import { AfterViewInit, Component } from '@angular/core';
 import { AnalysisService, AnalysisStatus } from '../../../shared/services/analysis.service';
 import { AnalysisValidityService } from '../management/analysis-validity.service';
+import { BridgeService } from '../../../shared/services/bridge.service';
 import { EventBrokerService } from '../../../shared/services/event-broker.service';
 
 @Component({
@@ -20,11 +21,21 @@ export class StatusIndicatorComponent implements AfterViewInit {
     private readonly analysisService: AnalysisService,
     private readonly analysisValidityService: AnalysisValidityService,
     private readonly eventBrokerService: EventBrokerService,
+    private readonly bridgeService: BridgeService,
   ) {
     this.setIcon(AnalysisStatus.NONE);
   }
 
   private setIcon(status: AnalysisStatus): void {
+    // The steel load test says nothing about pasta strength; on the pasta site report only stability.
+    if (
+      this.bridgeService.designConditions.isPasta &&
+      (status === AnalysisStatus.PASSES || status === AnalysisStatus.FAILS_LOAD_TEST)
+    ) {
+      this.iconSrc = 'img/good.png';
+      this.iconTitle = 'The design is stable. Use the Pasta simulation to check strength.';
+      return;
+    }
     ({ src: this.iconSrc, title: this.iconTitle } = AnalysisService.getStatusIcon(status));
   }
 

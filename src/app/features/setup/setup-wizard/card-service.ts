@@ -54,6 +54,9 @@ export interface SetupWizardCardView {
   /** Current value of the local contest code input widget. */
   get localContestCode(): string | null | undefined;
 
+  /** Whether the pasta site is chosen on card 2; it skips the steel site cards like a contest code. */
+  get isPastaSelected(): boolean;
+
   /** Renders am elevation cartoon of current design conditions with given options. See enum CartoonOptionsMask. */
   renderElevationCartoon(optionsMask: number): void;
 
@@ -93,7 +96,10 @@ export abstract class Card {
   }
 
   renderDeckCartoon(): void {
-    this.wizardView.deckCartoonSrc = this.deckCartoonSrcForConditions;
+    // The pasta site has no road deck or trucks to show.
+    this.wizardView.deckCartoonSrc = this.wizardView.designConditions.isPasta
+      ? DeckCartoonSrc.NONE
+      : this.deckCartoonSrcForConditions;
   }
 
   renderElevationCartoon(): void {
@@ -101,7 +107,8 @@ export abstract class Card {
   }
 
   renderLegendItemsForCartoon(): void {
-    const options = this.elevationCartoonOptions;
+    // No river, banks, or abutments on the pasta site; the tables explain themselves.
+    const options = this.wizardView.designConditions.isPasta ? 0 : this.elevationCartoonOptions;
     this.wizardView.setLegendItemVisibility('abutment', (options & CartoonOptionMask.ABUTMENTS) !== 0);
     this.wizardView.setLegendItemVisibility('bank', (options & CartoonOptionMask.IN_SITU_TERRAIN) !== 0);
     this.wizardView.setLegendItemVisibility('deck', (options & CartoonOptionMask.DECK) !== 0);
@@ -176,7 +183,7 @@ class Card2 extends Card {
   }
 
   override get nextCardIndex(): number | undefined {
-    return this.wizardView.localContestCode?.length ? 4 : this.index + 1;
+    return this.wizardView.localContestCode?.length || this.wizardView.isPastaSelected ? 4 : this.index + 1;
   }
 }
 
@@ -196,7 +203,7 @@ class Card5 extends Card {
   override index: number = 4;
 
   override get backCardIndex(): number | undefined {
-    return this.wizardView.localContestCode?.length ? 1 : this.index - 1;
+    return this.wizardView.localContestCode?.length || this.wizardView.isPastaSelected ? 1 : this.index - 1;
   }
 
   override initializeOnGoTo(): void {

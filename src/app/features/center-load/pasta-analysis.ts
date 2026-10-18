@@ -70,6 +70,8 @@ export type PastaResult = {
   memberFailureForceN: Float64Array;
   strandCounts: Int32Array;
   totalStrandCount: number;
+  /** Member lengths at the 1.00 m pasta scale, meters. */
+  memberLengthsM: Float64Array;
   /** Mass of one strand of each member, kilograms. */
   strandMassKg: Float64Array;
   massKg: number;
@@ -248,9 +250,18 @@ export function analyzePasta(input: PastaInput): PastaResult {
   return {
     forceN, scale, displacements, memberForces, tensileCapacityN, compressiveCapacityN, signedRatios, bucklingGoverns,
     overStrengthCount, peakRatio, centerDeflectionM, selfWeightN, totalStrandLengthM, firstFailureForceN,
-    memberFailureForceN, strandCounts: strands, totalStrandCount: strands.reduce((a, b) => a + b, 0),
+    memberFailureForceN, strandCounts: strands, memberLengthsM: lengths, totalStrandCount: strands.reduce((a, b) => a + b, 0),
     strandMassKg, massKg: selfWeightN / GRAVITY, efficiencyNPerG: firstFailureForceN / (selfWeightN / GRAVITY * 1000),
   };
+}
+
+/** Members longer than one strand of the given length at the 1.00 m pasta scale, in member order. */
+export function overLengthMembers(result: PastaResult, maxStrandLengthM: number): { index: number; lengthM: number }[] {
+  const over: { index: number; lengthM: number }[] = [];
+  result.memberLengthsM.forEach((lengthM, index) => {
+    if (lengthM > maxStrandLengthM * (1 + 1e-9)) over.push({ index, lengthM });
+  });
+  return over;
 }
 
 export type StrandOptimizationOptions = {
@@ -258,6 +269,8 @@ export type StrandOptimizationOptions = {
   massBudgetKg: number;
   /** Upper limit on strands in any one member. */
   maxStrandsPerMember: number;
+  /** Longest single strand, meters. When set, any longer member stops the optimizer. */
+  maxStrandLengthM?: number;
 };
 
 export type StrandOptimizationResult = {
@@ -283,6 +296,15 @@ export function optimizeStrands(input: PastaInput, options: StrandOptimizationOp
   let evaluations = 0;
   const evaluate = () => { evaluations++; return analyzePasta({ ...input, strandCounts: counts }); };
   let result = evaluate();
+  if (options.maxStrandLengthM !== undefined) {
+    const over = overLengthMembers(result, options.maxStrandLengthM);
+    if (over.length) {
+      throw new Error(
+        `${over.length} member(s) are longer than one ${(options.maxStrandLengthM * 100).toFixed(1)} cm strand ` +
+          `(${over.map(o => `M${o.index + 1}`).join(', ')}). Shorten them before optimizing.`,
+      );
+    }
+  }
   if (result.massKg > massBudgetKg * (1 + 1e-12)) {
     throw new Error(`One strand per member already weighs ${(result.massKg * 1000).toFixed(1)} g, over the budget.`);
   }

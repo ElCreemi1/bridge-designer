@@ -60,7 +60,7 @@ jobs:
       - name: Test center-load, pasta and 3D simulation regression suites
         run: >-
           npx ng test --watch=false --browsers=ChromeHeadless
-          --include='**/center-load/*.spec.ts' --include='**/fly-thru/**/*.spec.ts'
+          --include='**/center-load/*.spec.ts' --include='**/fly-thru/**/*.spec.ts' --include='**/shared/services/pasta-site.spec.ts'
       - name: Compile Angular application with root-relative assets
         run: |
           npx ng build --configuration production --base-href /

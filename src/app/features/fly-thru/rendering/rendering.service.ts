@@ -1,6 +1,7 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
 
+import { BridgeService } from '../../../shared/services/bridge.service';
 import { Injectable } from '@angular/core';
 import { mat4 } from 'gl-matrix';
 import { ShaderService } from '../shaders/shader.service';
@@ -60,6 +61,7 @@ export class RenderingService {
     private readonly viewService: ViewService,
     private readonly viewportService: ViewportService,
     private readonly windTurbineRenderingService: WindTurbineRenderingService,
+    private readonly bridgeService: BridgeService,
   ) {}
 
   /** 
@@ -71,6 +73,11 @@ export class RenderingService {
   }
 
   /** Prepares for rendering frames before every animation start. */
+  /** Scenery switched off in settings, or always off on the pasta site, which has no river valley. */
+  private hide(flag: 'noTerrain' | 'noAbutments' | 'noWindTurbine'): boolean {
+    return this.flyThruSettingsService.settings[flag] || this.bridgeService.designConditions.isPasta;
+  }
+
   public prepareToRender(): void {
     // Setups needed one time and before the per-design conditions setups.
     if (!this.prepared) {
@@ -176,14 +183,14 @@ export class RenderingService {
     // Renderers called here use depth shaders. See ShaderService.PROGRAM_SPECS.
     // Renderers can make no assumption about what's in the transforms uniform.
     this.uniformService.updateTransformsUniform(this.matrices);
-    if (!this.flyThruSettingsService.settings.noTerrain) {
+    if (!this.hide('noTerrain')) {
       this.utilityLineRenderingService.render(this.matrices);
     }
-    if (!this.flyThruSettingsService.settings.noAbutments) {
+    if (!this.hide('noAbutments')) {
       this.abutmentRenderingService.render(this.matrices);
       this.pierRenderingService.render(this.matrices);
     }
-    if (!this.flyThruSettingsService.settings.noWindTurbine) {
+    if (!this.hide('noWindTurbine')) {
       this.windTurbineRenderingService.render(this.matrices, nowMillis);
     }
     this.bridgeRenderingService.render(this.matrices);
@@ -238,18 +245,18 @@ export class RenderingService {
 
     // The renderers can make no assumption about what's in the transforms uniform.
     this.uniformService.updateTransformsUniform(this.matrices);
-    if (!this.flyThruSettingsService.settings.noTerrain) {
+    if (!this.hide('noTerrain')) {
       // For coarse depth buffers, render road first so less-than depth test keeps them on equal.
       this.meshRenderingService.renderColoredMesh(this.roadwayMesh);
       this.meshRenderingService.renderTerrainMesh(this.terrainMesh);
       this.utilityLineRenderingService.render(this.matrices);
       this.riverRenderingService.render(this.matrices);
     }
-    if (!this.flyThruSettingsService.settings.noAbutments) {
+    if (!this.hide('noAbutments')) {
       this.abutmentRenderingService.render(this.matrices);
       this.pierRenderingService.render(this.matrices);
     }
-    if (!this.flyThruSettingsService.settings.noWindTurbine) {
+    if (!this.hide('noWindTurbine')) {
       this.windTurbineRenderingService.render(this.matrices, nowMillis);
     }
     this.bridgeRenderingService.render(this.matrices);

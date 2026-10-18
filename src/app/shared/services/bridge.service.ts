@@ -11,6 +11,7 @@ import { SiteConstants } from '../classes/site-constants';
 import { DesignConditions, DesignConditionsService, LoadType } from './design-conditions.service';
 import { AllowedShapeChangeMask, InventoryService, StockId } from './inventory.service';
 import { BridgeSketchModel } from '../classes/bridge-sketch.model';
+import { PastaSettingsService } from './pasta-settings.service';
 import { DraftingPanelState, PersistenceService, SaveSet } from './persistence.service';
 import { SessionStateService } from '../../features/session-state/session-state.service';
 import { BridgeSketchService } from './bridge-sketch.service';
@@ -44,6 +45,7 @@ export class BridgeService {
     private readonly bridgeSketchService: BridgeSketchService,
     private readonly contestParametersService: ContestParametersService,
     private readonly persistenceService: PersistenceService,
+    private readonly pastaSettingsService: PastaSettingsService,
     sessionStateKey: BridgeServiceSessionStateKey,
     sessionStateService: SessionStateService,
   ) {
@@ -300,6 +302,22 @@ export class BridgeService {
     return this.findMembersWithJoint(joint)
       .map(member => member.getOtherJoint(joint))
       .some(otherJoint => this.isMemberIntersectingHighPier(newLocation, otherJoint));
+  }
+
+  /** Member length at the 1.00 m pasta scale (deck span scaled to 1.00 m), meters. */
+  public getPastaLengthM(member: Member): number {
+    return member.lengthM / this.designConditions.spanLength;
+  }
+
+  /** Whether the member is on the pasta site and longer than one strand. */
+  public isMemberOverStrandLength(member: Member): boolean {
+    return this.designConditions.isPasta && this.pastaSettingsService.isOverLength(this.getPastaLengthM(member));
+  }
+
+  /** Drafting mark for a member: red for over-length pasta, magenta for too slender, else none. */
+  public getMemberMark(member: Member): string | undefined {
+    if (this.isMemberOverStrandLength(member)) return 'red';
+    return this.isMemberPassingSlendernessCheck(member) ? undefined : 'magenta';
   }
 
   /** Returns whether the given member passes the slenderness check. */

@@ -61,6 +61,11 @@ export class SiteModel {
     // Extra 4 shows bottom of lowest abutment position.
     this.drawingWindow.y0 = this.yGradeLevel - SiteConstants.WATER_BELOW_GRADE - 4;
     this.drawingWindow.height = this.yGradeLevel + SiteConstants.OVERHEAD_CLEARANCE - this.drawingWindow.y0;
+    if (conditions.isPasta) {
+      // Pasta: the design space plus a small margin; no river valley. 3 world m = 7.5 cm.
+      this.drawingWindow.y0 = this.spanExtent.y0 - SiteConstants.PASTA_MARGIN;
+      this.drawingWindow.height = this.spanExtent.height + 2 * SiteConstants.PASTA_MARGIN;
+    }
     this.designConditions = conditions;
   }
 
