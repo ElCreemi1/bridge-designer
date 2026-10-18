@@ -20,6 +20,12 @@ A private AnalysisService instance with unit axle parameters gives single-joint 
 
 `pasta-analysis.ts` is a separate direct-stiffness 2D truss solver in SI units. Supports mirror the app solver's restraint rules (including piers, arches and anchorages). Inputs: diameter, elastic modulus, tensile strength, compressive strength and density. Defaults are placeholders, not measured data. Each member's self-weight is split equally to its end joints. Tension capacity is A*ft; compression capacity is the smaller of A*fc and pinned-end Euler buckling pi^2*E*I/L^2. The panel also reports pasta mass, strand length and the linear force at which the first member reaches capacity.
 
+### Strand bundles and optimizer
+
+Each member can hold a whole number of strands (default 1). Strands are loose: joined only at the joints and not bonded along their length, so each strand buckles independently. A bundle of n strands has n times the area, axial stiffness, weight, tensile capacity and compressive capacity of one strand (n*A*ft and n*min(A*fc, pi^2*E*I/L^2)). Gluing strands along their length would raise buckling capacity toward n^2 times one strand's bending stiffness; that is deliberately not modeled.
+
+Optimize strands keeps the drawn geometry and maximizes the linear first-failure center load within a mass budget and a per-member strand limit. It repeatedly adds a strand to the member that fails first, then removes any strand whose removal does not lower the failure load, repeating until neither step changes anything. Because member forces are recomputed after each change, statically indeterminate trusses are handled. The result is a good local optimum for whole strand counts, not a proven global optimum, and the panel reports efficiency in N/g. Strand counts reset when the member count changes.
+
 It analyzes one planar truss. Lateral bracing, twisting, out-of-plane buckling, glue joints and large deflections are not modeled.
 
 ## Limits
@@ -28,4 +34,4 @@ Both static modes are linear-elastic, small-deflection explorations, not safety 
 
 ## Automated checks
 
-The APK workflow runs `src/app/features/center-load/*.spec.ts` and the fly-thru specs before packaging. Pasta tests cover 1.00 m scaling, statics of a reference truss, virtual-work deflection, self-weight, buckling versus crushing, the first-failure load, invalid input and instability.
+The APK workflow runs `src/app/features/center-load/*.spec.ts` and the fly-thru specs before packaging. Pasta tests cover loose-bundle scaling, the strand optimizer (budget, member limit, no removable strands, beating uniform bundles, rescuing a self-weight failure), 1.00 m scaling, statics of a reference truss, virtual-work deflection, self-weight, buckling versus crushing, the first-failure load, invalid input and instability.

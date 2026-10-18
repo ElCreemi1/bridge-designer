@@ -1,6 +1,6 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
-import { analyzePasta, DEFAULT_PASTA_PROPERTIES, PastaInput, PastaProperties } from './pasta-analysis';
+import { analyzePasta, DEFAULT_PASTA_PROPERTIES, optimizeStrands, PastaInput, PastaProperties } from './pasta-analysis';
 
 const supports = {
   loadedJointCount: 3, isPier: false, isHiPier: false, pierJointIndex: -1, isArch: false, archJointIndex: -1,
@@ -61,5 +61,88 @@ describe('pasta analysis', () => {
     expect(() => analyzePasta(input(NaN))).toThrow();
     expect(() => analyzePasta(input(1, { diameterM: 0 }))).toThrow();
     expect(() => analyzePasta(input(1, {}, memberPairs.slice(0, 4)))).toThrowError(/unstable/i);
+  });
+
+  describe('loose strand bundles', () => {
+    const withCounts = (forceN: number, counts: number[], overrides: Partial<PastaProperties> = {}) =>
+      analyzePasta({ ...input(forceN, overrides), strandCounts: counts });
+
+    it('defaults to one strand per member', () => {
+      const r = analyzePasta(input(1));
+      expect(Array.from(r.strandCounts)).toEqual([1, 1, 1, 1, 1]);
+      expect(r.totalStrandCount).toBe(5);
+    });
+    it('scales area, weight and both capacities linearly with strand count', () => {
+      const one = analyzePasta(input(1)), r = withCounts(1, [1, 1, 3, 1, 1]);
+      expect(r.tensileCapacityN[2]).toBeCloseTo(3 * one.tensileCapacityN[2], 10);
+      expect(r.compressiveCapacityN[2]).toBeCloseTo(3 * one.compressiveCapacityN[2], 10);
+      expect(r.bucklingGoverns[2]).toBe(one.bucklingGoverns[2]); // Loose strands buckle one by one.
+      expect(r.massKg).toBeCloseTo(one.massKg + 2 * one.strandMassKg[2], 12);
+      expect(r.totalStrandCount).toBe(7);
+    });
+    it('keeps statically determinate member forces from the center load unchanged', () => {
+      const a0 = withCounts(0, [2, 2, 2, 2, 2]), a = withCounts(10, [2, 2, 2, 2, 2]);
+      const expected = [5, 5, -10 / Math.SQRT2, -10 / Math.SQRT2, 10];
+      expected.forEach((f, i) => expect(a.memberForces[i] - a0.memberForces[i]).toBeCloseTo(f, 8));
+    });
+    it('halves the center-load deflection when every member doubles', () => {
+      const d = (c: number[]) => withCounts(10, c).centerDeflectionM - withCounts(0, c).centerDeflectionM;
+      expect(d([2, 2, 2, 2, 2])).toBeCloseTo(d([1, 1, 1, 1, 1]) / 2, 12);
+    });
+    it('reports efficiency as failure load per gram', () => {
+      const r = withCounts(0, [1, 1, 2, 2, 1], { diameterM: 5e-3 });
+      expect(r.efficiencyNPerG).toBeCloseTo(r.firstFailureForceN / (r.massKg * 1000), 12);
+    });
+    it('rejects invalid strand counts', () => {
+      expect(() => withCounts(1, [1, 1, 0, 1, 1])).toThrow();
+      expect(() => withCounts(1, [1, 1, 1.5, 1, 1])).toThrow();
+      expect(() => withCounts(1, [1, 1, 1])).toThrow();
+    });
+  });
+
+  describe('strand optimizer', () => {
+    const base = input(0, { diameterM: 3e-3 });
+    const oneStrandMass = analyzePasta(base).massKg;
+
+    it('rescues a truss that fails under its own weight', () => {
+      const thin = input(0);
+      expect(analyzePasta(thin).firstFailureForceN).toBeNaN();
+      const { result } = optimizeStrands(thin, { massBudgetKg: 4 * analyzePasta(thin).massKg, maxStrandsPerMember: 50 });
+      expect(result.firstFailureForceN).toBeGreaterThan(0);
+    });
+
+    it('raises the failure load and respects the mass budget and member limit', () => {
+      const start = analyzePasta(base);
+      expect(start.firstFailureForceN).toBeGreaterThan(0);
+      const { strandCounts, result } = optimizeStrands(base, { massBudgetKg: 4 * oneStrandMass, maxStrandsPerMember: 12 });
+      expect(result.firstFailureForceN).toBeGreaterThan(start.firstFailureForceN * 2);
+      expect(result.massKg).toBeLessThanOrEqual(4 * oneStrandMass * (1 + 1e-12));
+      expect(Math.max(...strandCounts)).toBeLessThanOrEqual(12);
+      expect(Math.min(...strandCounts)).toBeGreaterThanOrEqual(1);
+    });
+    it('puts the most strands in the buckling-governed compression diagonals', () => {
+      const { strandCounts } = optimizeStrands(base, { massBudgetKg: 4 * oneStrandMass, maxStrandsPerMember: 50 });
+      // Members 2 and 3 are the long compression diagonals; 0, 1 and 4 are in tension.
+      expect(strandCounts[2]).toBeGreaterThan(strandCounts[0]);
+      expect(strandCounts[3]).toBeGreaterThan(strandCounts[4]);
+    });
+    it('leaves no strand that can be removed without lowering the failure load', () => {
+      const { strandCounts, result } = optimizeStrands(base, { massBudgetKg: 4 * oneStrandMass, maxStrandsPerMember: 50 });
+      for (let i = 0; i < strandCounts.length; i++) {
+        if (strandCounts[i] === 1) continue;
+        const fewer = Array.from(strandCounts); fewer[i]--;
+        const trial = analyzePasta({ ...base, strandCounts: fewer });
+        expect(trial.firstFailureForceN).toBeLessThan(result.firstFailureForceN * (1 - 1e-12));
+      }
+    });
+    it('beats uniform bundles of the same or greater mass', () => {
+      const { result } = optimizeStrands(base, { massBudgetKg: 3 * oneStrandMass, maxStrandsPerMember: 50 });
+      const uniform = analyzePasta({ ...base, strandCounts: [3, 3, 3, 3, 3] });
+      expect(result.massKg).toBeLessThanOrEqual(uniform.massKg * (1 + 1e-12));
+      expect(result.firstFailureForceN).toBeGreaterThan(uniform.firstFailureForceN);
+    });
+    it('rejects a budget below one strand per member', () => {
+      expect(() => optimizeStrands(base, { massBudgetKg: oneStrandMass / 2, maxStrandsPerMember: 10 })).toThrowError(/budget/);
+    });
   });
 });

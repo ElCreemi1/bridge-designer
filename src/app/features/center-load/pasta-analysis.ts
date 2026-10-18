@@ -38,6 +38,12 @@ export type PastaInput = {
   supports: PastaSupports;
   properties: PastaProperties;
   forceN: number;
+  /**
+   * Strands per member, default 1. Strands are loose: connected only at the joints and not
+   * bonded along their length, so each one buckles on its own. A bundle of n strands has n
+   * times the area, axial stiffness, weight and capacity of one strand.
+   */
+  strandCounts?: ArrayLike<number>;
 };
 
 export type PastaResult = {
@@ -60,7 +66,29 @@ export type PastaResult = {
   totalStrandLengthM: number;
   /** Center force at which the first member reaches capacity in this linear model; NaN if self-weight alone fails; Infinity if never. */
   firstFailureForceN: number;
+  /** Per member: center force at which it reaches capacity; -Infinity if self-weight alone fails it; Infinity if never. */
+  memberFailureForceN: Float64Array;
+  strandCounts: Int32Array;
+  totalStrandCount: number;
+  /** Mass of one strand of each member, kilograms. */
+  strandMassKg: Float64Array;
+  massKg: number;
+  /** Failure load per gram of pasta, N/g; NaN or Infinity when the failure load is. */
+  efficiencyNPerG: number;
 };
+
+/** Validated integer strand counts, defaulting to one strand per member. */
+function strandCountsFor(memberCount: number, counts: ArrayLike<number> | undefined): Int32Array {
+  const result = new Int32Array(memberCount).fill(1);
+  if (!counts) return result;
+  if (counts.length !== memberCount) throw new Error('Strand counts must list one value per member.');
+  for (let i = 0; i < memberCount; i++) {
+    const n = counts[i];
+    if (!Number.isInteger(n) || n < 1) throw new Error(`Member ${i + 1} must have a whole number of strands, at least 1.`);
+    result[i] = n;
+  }
+  return result;
+}
 
 function validateProperties(p: PastaProperties): void {
   const entries: [string, number][] = [
@@ -121,7 +149,8 @@ export function analyzePasta(input: PastaInput): PastaResult {
 
   const area = Math.PI * properties.diameterM ** 2 / 4;
   const inertia = Math.PI * properties.diameterM ** 4 / 64;
-  const ea = properties.elasticModulusPa * area;
+  const strands = strandCountsFor(members.length, input.strandCounts);
+  const eaStrand = properties.elasticModulusPa * area;
   const nJoints = joints.length, nDof = 2 * nJoints;
 
   // Restraints follow AnalysisService.
@@ -148,12 +177,14 @@ export function analyzePasta(input: PastaInput): PastaResult {
 
   const lengths = new Float64Array(members.length), cos = new Float64Array(members.length), sin = new Float64Array(members.length);
   let selfWeightN = 0, totalStrandLengthM = 0;
+  const strandMassKg = new Float64Array(members.length);
   members.forEach((m, i) => {
     const dx = x[m.b] - x[m.a], dy = y[m.b] - y[m.a], length = Math.hypot(dx, dy);
     if (!Number.isFinite(length) || length <= 0) throw new Error('A member has invalid length.');
     lengths[i] = length; cos[i] = dx / length; sin[i] = dy / length;
-    totalStrandLengthM += length;
-    const weight = properties.densityKgM3 * area * length * GRAVITY;
+    totalStrandLengthM += strands[i] * length;
+    strandMassKg[i] = properties.densityKgM3 * area * length;
+    const weight = strands[i] * strandMassKg[i] * GRAVITY;
     selfWeightN += weight;
     for (const joint of [m.a, m.b]) {
       const p = position[2 * joint + 1];
@@ -161,7 +192,7 @@ export function analyzePasta(input: PastaInput): PastaResult {
     }
     const dofs = [2 * m.a, 2 * m.a + 1, 2 * m.b, 2 * m.b + 1];
     const t = [-cos[i], -sin[i], cos[i], sin[i]];
-    const stiffness = ea / length;
+    const stiffness = strands[i] * eaStrand / length;
     for (let r = 0; r < 4; r++) {
       const pr = position[dofs[r]]; if (pr < 0) continue;
       for (let c = 0; c < 4; c++) {
@@ -182,20 +213,22 @@ export function analyzePasta(input: PastaInput): PastaResult {
 
   const axial = (u: Float64Array, i: number) => {
     const m = members[i];
-    return (ea / lengths[i]) * (cos[i] * (u[2 * m.b] - u[2 * m.a]) + sin[i] * (u[2 * m.b + 1] - u[2 * m.a + 1]));
+    return (strands[i] * eaStrand / lengths[i]) * (cos[i] * (u[2 * m.b] - u[2 * m.a]) + sin[i] * (u[2 * m.b + 1] - u[2 * m.a + 1]));
   };
   const n = members.length;
   const memberForces = new Float64Array(n), signedRatios = new Float64Array(n);
   const tensileCapacityN = new Float64Array(n), compressiveCapacityN = new Float64Array(n);
   const bucklingGoverns = new Uint8Array(n);
+  const memberFailureForceN = new Float64Array(n);
   let overStrengthCount = 0, peakRatio = 0, firstFailureForceN = Infinity;
   for (let i = 0; i < n; i++) {
     const dead = axial(deadDisp, i), unit = axial(unitDisp, i);
     const force = dead + forceN * unit;
+    // Loose strands: each strand buckles independently, so capacities scale with the count.
     const euler = Math.PI ** 2 * properties.elasticModulusPa * inertia / lengths[i] ** 2;
     const crushing = properties.compressiveStrengthPa * area;
-    tensileCapacityN[i] = properties.tensileStrengthPa * area;
-    compressiveCapacityN[i] = Math.min(euler, crushing);
+    tensileCapacityN[i] = strands[i] * properties.tensileStrengthPa * area;
+    compressiveCapacityN[i] = strands[i] * Math.min(euler, crushing);
     bucklingGoverns[i] = euler < crushing ? 1 : 0;
     memberForces[i] = force;
     signedRatios[i] = force >= 0 ? force / tensileCapacityN[i] : force / compressiveCapacityN[i];
@@ -207,6 +240,7 @@ export function analyzePasta(input: PastaInput): PastaResult {
     if (unit > 0) candidates.push((tensileCapacityN[i] - dead) / unit);
     if (unit < 0) candidates.push((-compressiveCapacityN[i] - dead) / unit);
     const deadRatio = dead >= 0 ? dead / tensileCapacityN[i] : -dead / compressiveCapacityN[i];
+    memberFailureForceN[i] = deadRatio > 1 ? -Infinity : Math.min(Infinity, ...candidates.filter(c => c >= 0));
     if (deadRatio > 1) firstFailureForceN = NaN;
     else for (const c of candidates) if (c >= 0 && !Number.isNaN(firstFailureForceN)) firstFailureForceN = Math.min(firstFailureForceN, c);
   }
@@ -214,5 +248,86 @@ export function analyzePasta(input: PastaInput): PastaResult {
   return {
     forceN, scale, displacements, memberForces, tensileCapacityN, compressiveCapacityN, signedRatios, bucklingGoverns,
     overStrengthCount, peakRatio, centerDeflectionM, selfWeightN, totalStrandLengthM, firstFailureForceN,
+    memberFailureForceN, strandCounts: strands, totalStrandCount: strands.reduce((a, b) => a + b, 0),
+    strandMassKg, massKg: selfWeightN / GRAVITY, efficiencyNPerG: firstFailureForceN / (selfWeightN / GRAVITY * 1000),
   };
+}
+
+export type StrandOptimizationOptions = {
+  /** Upper limit on total pasta mass, kilograms. */
+  massBudgetKg: number;
+  /** Upper limit on strands in any one member. */
+  maxStrandsPerMember: number;
+};
+
+export type StrandOptimizationResult = {
+  strandCounts: Int32Array;
+  result: PastaResult;
+  /** Number of structural solves performed. */
+  evaluations: number;
+};
+
+/**
+ * Chooses whole strand counts to maximize the first-failure center load within a mass budget.
+ * Greedy: repeatedly add a strand to the member that fails first, then remove strands that do
+ * not lower the failure load. The drawn geometry is unchanged. Linear model; each result should
+ * be checked against a built prototype.
+ */
+export function optimizeStrands(input: PastaInput, options: StrandOptimizationOptions): StrandOptimizationResult {
+  const { massBudgetKg, maxStrandsPerMember } = options;
+  if (!Number.isFinite(massBudgetKg) || massBudgetKg <= 0) throw new Error('Mass budget must be a positive number.');
+  if (!Number.isInteger(maxStrandsPerMember) || maxStrandsPerMember < 1) {
+    throw new Error('Maximum strands per member must be a whole number, at least 1.');
+  }
+  const counts = new Int32Array(input.members.length).fill(1);
+  let evaluations = 0;
+  const evaluate = () => { evaluations++; return analyzePasta({ ...input, strandCounts: counts }); };
+  let result = evaluate();
+  if (result.massKg > massBudgetKg * (1 + 1e-12)) {
+    throw new Error(`One strand per member already weighs ${(result.massKg * 1000).toFixed(1)} g, over the budget.`);
+  }
+  // Treat a self-weight failure as the lowest possible failure load.
+  const score = (r: PastaResult) => (Number.isNaN(r.firstFailureForceN) ? -Infinity : r.firstFailureForceN);
+  const limit = 100000;
+  const grow = () => {
+    // Strengthen the member that fails first until the budget or member limit stops it.
+    while (evaluations < limit && score(result) !== Infinity) {
+      let governing = -1;
+      for (let i = 0; i < counts.length; i++) {
+        if (governing < 0 || result.memberFailureForceN[i] < result.memberFailureForceN[governing]) governing = i;
+      }
+      if (governing < 0 || counts[governing] >= maxStrandsPerMember) return;
+      if (result.massKg + result.strandMassKg[governing] > massBudgetKg * (1 + 1e-12)) return;
+      counts[governing]++;
+      result = evaluate();
+    }
+  };
+  const prune = (): boolean => {
+    // Drop strands that do not lower the failure load, most lightly used members first.
+    let any = false, improved = true;
+    while (improved && evaluations < limit) {
+      improved = false;
+      const best = score(result);
+      const order = Array.from(counts.keys()).filter(i => counts[i] > 1)
+        .sort((a, b) => result.memberFailureForceN[b] - result.memberFailureForceN[a]);
+      for (const i of order) {
+        counts[i]--;
+        const trial = evaluate();
+        if (score(trial) > -Infinity && score(trial) >= best * (1 - 1e-12)) {
+          result = trial;
+          improved = any = true;
+        } else {
+          counts[i]++;
+        }
+      }
+    }
+    return any;
+  };
+  // Pruning frees mass that growing can spend; repeat until neither changes anything.
+  for (let pass = 0; pass < 20; pass++) {
+    grow();
+    if (!prune()) break;
+  }
+  result = evaluate();
+  return { strandCounts: Int32Array.from(counts), result, evaluations };
 }
