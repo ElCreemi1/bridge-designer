@@ -32,3 +32,7 @@ Use a development computer with Node/npm and an Android Studio toolchain compati
 3. On a phone with no mouse or pen, create a bridge, place joints, connect members, move and erase elements, undo/redo, run a load test, and save/reopen the bridge.
 4. Test portrait and landscape layouts, dialog access, app background/resume, interrupted drags, multiple fingers, and screen-edge gestures.
 5. Verify offline assets, Android file handling, licensing, and reproducible APK builds before distributing a release.
+
+## Focus mode
+
+The Focus button in the lower-left corner hides the menu bar, both toolbars, the member table and the table toggle, leaving only the drafting area (with rulers and the Tools palette) or the 3D simulation. Tap Show menus to bring them back. The choice is remembered in local storage (`bridge-designer.focusMode`). Dialogs still open over focus mode.

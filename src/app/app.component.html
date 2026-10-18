@@ -1,7 +1,7 @@
 <!-- Copyright (c) 2025-2026 Gene Ressler
      SPDX-License-Identifier: GPL-3.0-or-later -->
 
-<div class="top-view">
+<div class="top-view" [class.focus-mode]="focusMode">
   <menus #appMenus class="menus"></menus>
   <div class="toolbar-wrapper">
     <toolbar-a></toolbar-a>
@@ -22,6 +22,14 @@
     [attr.aria-label]="memberTable.display === 'block' ? 'Hide member table' : 'Show member table'"
     (click)="appMenus.handleItemClick({ args: { id: 'memberList' } })"
   >{{ memberTable.display === 'block' ? 'Hide table' : 'Show table' }}</button>
+  <button
+    type="button"
+    class="focus-toggle"
+    [attr.aria-pressed]="focusMode"
+    [attr.aria-label]="focusMode ? 'Show menus, toolbars and member table' : 'Hide menus, toolbars and member table'"
+    [title]="focusMode ? 'Show menus, toolbars and member table' : 'Hide everything except the drawing or simulation'"
+    (click)="toggleFocusMode()"
+  >{{ focusMode ? 'Show menus' : 'Focus' }}</button>
 </div>
 <!-- Normally invisible dialogs; keep their existing initialization and welcome sequence. -->
 <div style="height: 0; width: 0; overflow: hidden">

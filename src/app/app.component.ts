@@ -73,6 +73,20 @@ import { ContestWelcomeDialogComponent } from './features/contest/contest-welcom
   encapsulation: ViewEncapsulation.None,
 })
 export class AppComponent implements AfterViewInit {
+  private static readonly FOCUS_MODE_KEY = 'bridge-designer.focusMode';
+  /** Hides menus, toolbars and the member table so only the drawing or simulation area remains. */
+  focusMode = AppComponent.readFocusMode();
+
+  private static storage(): Storage | undefined {
+    try { return window.localStorage; } catch { return undefined; }
+  }
+  private static readFocusMode(): boolean {
+    return AppComponent.storage()?.getItem(AppComponent.FOCUS_MODE_KEY) === '1';
+  }
+  toggleFocusMode(): void {
+    this.focusMode = !this.focusMode;
+    try { AppComponent.storage()?.setItem(AppComponent.FOCUS_MODE_KEY, this.focusMode ? '1' : '0'); } catch { /* Optional. */ }
+  }
   @ViewChild('allowFreshStartDialog') allowFreshStartDialog!: AllowFreshStartDialogComponent;
   @ViewChild('bottomRuler') bottomRuler!: RulerComponent;
   @ViewChild('contestWelcomeDialog') contestWelcomeDialog!: ContestWelcomeDialogComponent;

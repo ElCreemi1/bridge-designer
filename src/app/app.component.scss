@@ -44,3 +44,23 @@
     box-shadow: 0 1px 4px #0004; touch-action: manipulation;
   }
 }
+
+/* Focus mode: only the drafting area (with rulers) or the simulation remains. */
+.top-view.focus-mode { height: calc(100vh - 16px); }
+.top-view.focus-mode > .menus,
+.top-view.focus-mode > .toolbar-wrapper,
+.top-view.focus-mode > .member-table,
+.top-view.focus-mode > .touch-table-toggle { display: none !important; }
+
+.focus-toggle {
+  position: fixed; z-index: 1100;
+  left: max(8px, env(safe-area-inset-left));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  min-height: 36px; padding: 6px 12px;
+  border: 1px solid #555; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.9); color: #111; font: 14px sans-serif;
+  box-shadow: 0 1px 4px #0004; touch-action: manipulation; cursor: pointer;
+}
+@media screen and (pointer: coarse) {
+  .focus-toggle { min-height: 44px; min-width: 88px; font-size: 15px; }
+}
