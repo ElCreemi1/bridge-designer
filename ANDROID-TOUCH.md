@@ -36,3 +36,7 @@ Use a development computer with Node/npm and an Android Studio toolchain compati
 ## Focus mode
 
 The Focus button in the lower-left corner hides the menu bar, both toolbars, the member table and the table toggle, leaving only the drafting area (with rulers and the Tools palette) or the 3D simulation. Tap Show menus to bring them back. The choice is remembered in local storage (`bridge-designer.focusMode`). Dialogs still open over focus mode.
+
+## Web version (iPhone and iPad)
+
+`.github/workflows/web-pages.yml` builds the same app on each push to `main` and publishes it with GitHub Pages at `https://<owner>.github.io/<repo>/`. It runs the center-load, pasta and fly-thru tests first. In Safari, Share > Add to Home Screen opens it without browser bars. The 3D simulation requires WebGL 2 (iOS/iPadOS 15 or later). Saved designs live in each browser's local storage, so a Home Screen copy and a Safari tab do not share them.

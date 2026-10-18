@@ -1,0 +1,64 @@
+name: Web version (GitHub Pages)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/web-pages.yml'
+      - 'angular.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'src/**'
+      - 'public/**'
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: web-pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked web dependencies
+        run: npm ci
+      - name: Test center-load, pasta and 3D simulation regression suites
+        run: >-
+          npx ng test --watch=false --browsers=ChromeHeadless
+          --include='**/center-load/*.spec.ts' --include='**/fly-thru/**/*.spec.ts'
+      - name: Build for the repository Pages path
+        run: |
+          npx ng build --configuration production --base-href "/${{ github.event.repository.name }}/"
+          out=dist/bridge-designer/browser
+          test -s "$out/index.html"
+          test -s "$out/img/splash.png"
+          # Serve the app for unknown paths too, and skip Jekyll processing.
+          cp "$out/index.html" "$out/404.html"
+          touch "$out/.nojekyll"
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/bridge-designer/browser
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
