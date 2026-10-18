@@ -1,82 +1,46 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
 
-.jqx-button {
-  padding: 1px;
-  margin: 0;
-}
-
-.jqx-toolbar {
-  border: none;
-}
-
-.button-icon {
-  margin: 0;
-  padding: 0;
-}
-
-// Grid layout
+.jqx-button { padding: 1px; margin: 0; }
+.jqx-toolbar { border: none; }
+.button-icon { margin: 0; padding: 0; }
 
 .top-view {
   display: grid;
   grid-template-columns: min-content 1fr min-content;
   grid-template-rows: min-content min-content 1fr min-content;
-  height: calc(100vh - 16px); // -16 px needed to avoid scrollbar. Why?
+  height: calc(100vh - 16px);
 }
-
-.menus {
-  grid-row: 1;
-  grid-column: 1 / span 3;
-}
-
+.menus { grid-row: 1; grid-column: 1 / span 3; }
 .toolbar-wrapper {
-  grid-row: 2;
-  grid-column: 1 / span 3;
-  
-  width: 100%;
-  border: 1px solid;
-  border-color: rgb(197, 197, 197);
-  border-radius: 3px;
+  grid-row: 2; grid-column: 1 / span 3; width: 100%;
+  border: 1px solid rgb(197, 197, 197); border-radius: 3px;
 }
-
 .drafting-area-cover {
-  grid-row: 3 / 5;
-  grid-column: 1 / span 3;
-  background-color: lightgray;
-  display: block;
-  z-index: 1000; // Member grid uses 520 for "no data" cover.
+  grid-row: 3 / 5; grid-column: 1 / span 3; background-color: lightgray;
+  display: block; z-index: 1000;
 }
-
 .fly-thru-pane {
-  grid-row: 3 / 5;
-  grid-column: 1 / span 3;
-  display: none;
-  z-index: 1000;
+  grid-row: 3 / 5; grid-column: 1 / span 3; display: none; z-index: 1000;
 }
-
 .drafting-panel {
-  grid-row: 3;
-  grid-column: 2;
-  height: 100%;
-  border-left: 1px solid black;
-  border-right: 1px solid black;
-  border-bottom: 1px solid black;
+  grid-row: 3; grid-column: 2; height: 100%;
+  border-left: 1px solid black; border-right: 1px solid black; border-bottom: 1px solid black;
   margin: 0 -1px -1px -1px;
 }
+.member-table { grid-row: 3 / 5; grid-column: 3; }
+.left-ruler { grid-row: 3 / 5; grid-column: 1; width: 30px; }
+.bottom-ruler { grid-row: 4; grid-column: 2; height: 30px; }
 
-.member-table {
-  grid-row: 3 / 5;
-  grid-column: 3;
-}
-
-.left-ruler {
-  grid-row: 3 / 5;
-  grid-column: 1;
-  width: 30px;
-}
-
-.bottom-ruler {
-  grid-row: 4;
-  grid-column: 2;
-  height: 30px;
+.touch-table-toggle { display: none; }
+@media screen and (pointer: coarse) {
+  .touch-table-toggle {
+    display: block; position: fixed;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    z-index: 1100; min-width: 100px; min-height: 44px;
+    padding: 8px 12px; border: 1px solid #555; border-radius: 6px;
+    background: #fff; color: #111; font: 15px sans-serif;
+    box-shadow: 0 1px 4px #0004; touch-action: manipulation;
+  }
 }

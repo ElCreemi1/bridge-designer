@@ -2,99 +2,54 @@
      SPDX-License-Identifier: GPL-3.0-or-later -->
 
 <div class="top-view">
-  <menus class="menus"></menus>
+  <menus #appMenus class="menus"></menus>
   <div class="toolbar-wrapper">
     <toolbar-a></toolbar-a>
     <toolbar-b></toolbar-b>
   </div>
-  <div
-    #draftingAreaCover
-    class="drafting-area-cover"
-  ></div>
+  <div #draftingAreaCover class="drafting-area-cover"></div>
   <drafting-panel class="drafting-panel"></drafting-panel>
-  <fly-thru-pane
-    #flyThruPane
-    class="fly-thru-pane"
-  ></fly-thru-pane>
-  <member-table
-    #memberTable
-    class="member-table"
-  ></member-table>
-  <ruler
-    #leftRuler
-    class="left-ruler"
-    [position]="'left'"
-  ></ruler>
-  <ruler
-    #bottomRuler
-    class="bottom-ruler"
-    [position]="'bottom'"
-  ></ruler>
+  <fly-thru-pane #flyThruPane class="fly-thru-pane"></fly-thru-pane>
+  <member-table #memberTable id="member-list-panel" class="member-table"></member-table>
+  <ruler #leftRuler class="left-ruler" [position]="'left'"></ruler>
+  <ruler #bottomRuler class="bottom-ruler" [position]="'bottom'"></ruler>
+  <!-- Route through the existing View-menu handler to preserve toggle state and notifications. -->
+  <button
+    type="button"
+    class="touch-table-toggle"
+    aria-controls="member-list-panel"
+    [attr.aria-expanded]="memberTable.display === 'block'"
+    [attr.aria-label]="memberTable.display === 'block' ? 'Hide member table' : 'Show member table'"
+    (click)="appMenus.handleItemClick({ args: { id: 'memberList' } })"
+  >{{ memberTable.display === 'block' ? 'Hide table' : 'Show table' }}</button>
 </div>
-<!-- 
-  -- Normally invisible dialogs. Size setting prevents dialog centering confusion. 
-  -- Deferred loading of large components speeds initial display.
-  -->
+<!-- Normally invisible dialogs; keep their existing initialization and welcome sequence. -->
 <div style="height: 0; width: 0; overflow: hidden">
-  <div>
-    <about-dialog />
-  </div>
-  <div>
-    <allow-fresh-start-dialog #allowFreshStartDialog />
-  </div>
-  <div>
-    <contest-welcome-dialog #contestWelcomeDialog />
-  </div>
-  <div>
-    <cost-report-dialog />
-  </div>
-  <div>
-    <design-iteration-dialog />
-  </div>
-  <div>
-    <design-saver-loader />
-  </div>
+  <div><about-dialog /></div>
+  <div><allow-fresh-start-dialog #allowFreshStartDialog /></div>
+  <div><contest-welcome-dialog #contestWelcomeDialog /></div>
+  <div><cost-report-dialog /></div>
+  <div><design-iteration-dialog /></div>
+  <div><design-saver-loader /></div>
   <div>
     @defer {
       <help-dialog (onLoad)="handleHelpDialogLoad()" />
     }
   </div>
-  <div>
-    <load-test-report-dialog />
-  </div>
-  <div>
-    <member-details-dialog />
-  </div>
-  <div>
-    <member-edit-dialog />
-  </div>
-  <div>
-    <missing-feature-disabler-dialog #missingFeatureDisablerDialog></missing-feature-disabler-dialog>
-  </div>
+  <div><load-test-report-dialog /></div>
+  <div><member-details-dialog /></div>
+  <div><member-edit-dialog /></div>
+  <div><missing-feature-disabler-dialog #missingFeatureDisablerDialog></missing-feature-disabler-dialog></div>
   <div>
     @defer {
       <print-3d-parameters-dialog />
     }
   </div>
-  <div>
-    <sample-selection-dialog />
-  </div>
-  <div>
-    <setup-wizard />
-  </div>
-  <div>
-    <slenderness-fail-dialog />
-  </div>
-  <div>
-    <template-selection-dialog />
-  </div>
-  <div>
-    <tip-dialog (onClose)="handleTipDialogClose($event)" />
-  </div>
-  <div>
-    <unstable-bridge-dialog />
-  </div>
-  <div>
-    <welcome-dialog />
-  </div>
+  <div><sample-selection-dialog /></div>
+  <div><setup-wizard /></div>
+  <div><slenderness-fail-dialog /></div>
+  <div><template-selection-dialog /></div>
+  <div><tip-dialog (onClose)="handleTipDialogClose($event)" /></div>
+  <div><unstable-bridge-dialog /></div>
+  <div><welcome-dialog /></div>
 </div>
