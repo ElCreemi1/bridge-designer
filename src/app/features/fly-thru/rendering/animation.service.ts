@@ -39,6 +39,10 @@ export class AnimationService {
   private lastNowMillis: number | undefined;
   /** Total total time in the current "now" second spent in rendering code. */
   private totalRenderMillis: number = 0;
+  /** Incremented on each start and stop so a stale loop from an earlier start exits. */
+  private loopGeneration: number = 0;
+  private pendingFrame: number | undefined;
+  private pendingTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly eventBrokerService: EventBrokerService,
@@ -65,8 +69,10 @@ export class AnimationService {
       return;
     }
     this._state = AnimationState.RUNNING;
+    const generation = ++this.loopGeneration;
     const render = (nowMillis: number): void => {
-      if (this._state === AnimationState.STOPPED) {
+      this.pendingFrame = undefined;
+      if (this._state === AnimationState.STOPPED || generation !== this.loopGeneration) {
         return; // Skips scheduling next loop iteration.
       }
       // Handle first frame.
@@ -106,17 +112,24 @@ export class AnimationService {
       }
 
       // Schedule next loop iteration.
-      requestAnimationFrame(render);
+      this.pendingFrame = requestAnimationFrame(render);
     };
     this.renderService.prepareToRender();
     // Kick off the animation loop. Scheduled so the resize handler can
     // set viewport and projection before first frame is rendered.
-    setTimeout(() => requestAnimationFrame(render));
+    this.pendingTimeout = setTimeout(() => {
+      this.pendingTimeout = undefined;
+      if (generation === this.loopGeneration) this.pendingFrame = requestAnimationFrame(render);
+    });
   }
 
   /** Stops calls to the registered renderer. */
   public stop(): void {
     this._state = AnimationState.STOPPED;
+    ++this.loopGeneration;
+    if (this.pendingTimeout !== undefined) clearTimeout(this.pendingTimeout);
+    if (this.pendingFrame !== undefined) cancelAnimationFrame(this.pendingFrame);
+    this.pendingTimeout = this.pendingFrame = undefined;
   }
 
   /** When running, pauses the clock while the renderer is still called at the frame rate. */

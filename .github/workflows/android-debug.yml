@@ -57,8 +57,10 @@ jobs:
         run: |
           npm install --save-exact @capacitor/core@7 @capacitor/android@7
           npm install --save-dev --save-exact @capacitor/cli@7
-      - name: Test center-load distribution and numerical response
-        run: npx ng test --watch=false --browsers=ChromeHeadless --include='**/center-load.spec.ts'
+      - name: Test center-load, pasta and 3D simulation regression suites
+        run: >-
+          npx ng test --watch=false --browsers=ChromeHeadless
+          --include='**/center-load/*.spec.ts' --include='**/fly-thru/**/*.spec.ts'
       - name: Compile Angular application with root-relative assets
         run: |
           npx ng build --configuration production --base-href /

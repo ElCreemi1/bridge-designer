@@ -168,9 +168,14 @@ export class BridgeRenderingService {
 
   private renderMesh(mesh: BridgeMesh): void {
     // Render with meshes most likely to be occluded last to save work.
-    this.meshRenderingService.renderColoredMesh(mesh.deckSlabsMesh);
+    const hideDeck = this.simulationStateService.hideDeck;
+    if (!hideDeck) {
+      this.meshRenderingService.renderColoredMesh(mesh.deckSlabsMesh);
+    }
     this.meshRenderingService.renderColoredMesh(mesh.membersMesh);
-    this.meshRenderingService.renderColoredMesh(mesh.deckBeamsMesh);
+    if (!hideDeck) {
+      this.meshRenderingService.renderColoredMesh(mesh.deckBeamsMesh);
+    }
     mesh.gussetMeshes.forEach(mesh => this.meshRenderingService.renderColoredMesh(mesh));
     if (this.glService.isRenderingDisplay) {
       this.meshRenderingService.renderWire(mesh.stiffeningWires);

@@ -8,4 +8,7 @@
   border:1px solid #555; border-radius:6px; background:#fff; color:#111; font:14px sans-serif;
 }
 .load-mode-controls select { min-height:40px; max-width:230px; font:14px sans-serif; }
-.center-mode-panel { position:absolute; inset:60px 0 0; z-index:3; }
+.static-load-panel {
+  position:absolute; z-index:3; top:60px; right:max(8px, env(safe-area-inset-right));
+  width:min(340px, calc(100% - 96px)); max-height:calc(100% - 68px); display:flex; flex-direction:column;
+}

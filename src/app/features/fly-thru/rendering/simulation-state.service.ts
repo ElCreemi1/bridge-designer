@@ -21,6 +21,40 @@ export const enum SimulationPhase {
   COLLAPSING,
 }
 
+/** A precomputed static response shown in the 3D scene instead of the truck simulation. */
+export type StaticResponse = {
+  /** World-space joint displacements in meters, interleaved x,y, already exaggerated for display. */
+  displayDisplacements: ArrayLike<number>;
+  /** Signed force/strength ratios, negative in compression. */
+  signedRatios: ArrayLike<number>;
+  /** Hide deck slabs and beams, e.g. for a bare pasta truss. */
+  hideDeck: boolean;
+};
+
+/** Interpolator that holds one static response. Never reports failed members, so no collapse is animated. */
+class StaticInterpolator implements Interpolator {
+  public readonly memberForceStrengthRatios = new Float32Array(DesignConditions.MAX_MEMBER_COUNT);
+  public readonly failedMemberKinds = new Uint8Array(DesignConditions.MAX_MEMBER_COUNT);
+  public readonly failedMemberCount = 0;
+  public readonly parameter = 0;
+  public readonly source = undefined as unknown as Interpolator['source'];
+  constructor(private readonly bridgeService: BridgeService, private readonly response: StaticResponse) {
+    const n = Math.min(response.signedRatios.length, DesignConditions.MAX_MEMBER_COUNT);
+    for (let i = 0; i < n; i++) this.memberForceStrengthRatios[i] = response.signedRatios[i];
+  }
+  public setParameter(_t: number): Interpolator { return this; }
+  public getLoadPosition(frontOut: vec2, rotationOut: vec2): void { vec2.set(frontOut, -1000, 0); vec2.set(rotationOut, 1, 0); }
+  public getAllDisplacedJointLocations(out: Float32Array): Float32Array {
+    const joints = this.bridgeService.bridge.joints, d = this.response.displayDisplacements;
+    for (let i = 0; i < joints.length; i++) {
+      out[2 * i] = joints[i].x + (d[2 * i] ?? 0);
+      out[2 * i + 1] = joints[i].y + (d[2 * i + 1] ?? 0);
+    }
+    return out;
+  }
+  public getMemberForce(_index: number): number { return NaN; }
+}
+
 /** Container for the state machine that drives the load simulation. */
 @Injectable({ providedIn: 'root' })
 export class SimulationStateService {
@@ -55,6 +89,9 @@ export class SimulationStateService {
   private traversingInterpolator!: Interpolator;
   // Undefined until created after the test has failed, and failure analysis is completes.
   private collapsingInterpolator: Interpolator | undefined;
+  /** When set, the scene shows this static response; truck traversal and collapse are suspended. */
+  private staticInterpolator: StaticInterpolator | undefined;
+  private staticHideDeck = false;
 
   constructor(
     private readonly bridgeService: BridgeService,
@@ -65,6 +102,23 @@ export class SimulationStateService {
   ) {
     eventBrokerService.simulationReplayRequest.subscribe(() => this.start());
   }
+
+  /** Shows a static response, or resumes the truck simulation from its start when given undefined. */
+  public setStaticResponse(response: StaticResponse | undefined): void {
+    const wasStatic = this.staticInterpolator !== undefined;
+    this.staticInterpolator = response ? new StaticInterpolator(this.bridgeService, response) : undefined;
+    this.staticHideDeck = response?.hideDeck ?? false;
+    if (response) {
+      this.loadAlpha = 0;
+      vec2.set(this.wayPoint, -1000, 0);
+      vec2.set(this.rotation, 1, 0);
+    } else if (wasStatic && this.deadLoadingInterpolator) {
+      this.start();
+    }
+  }
+
+  public get isStatic(): boolean { return this.staticInterpolator !== undefined; }
+  public get hideDeck(): boolean { return this.staticHideDeck; }
 
   /** Starts or restarts the state machine. */
   public start(): void {
@@ -81,6 +135,9 @@ export class SimulationStateService {
     this.endParameter = this.bridgeService.designConditions.spanLength + SimulationStateService.END_PARAMETER_PAST_SPAN;
     this.deadLoadingInterpolator.setParameter(0).getLoadPosition(this.wayPoint, this.rotation);
     this.collapsingInterpolator = undefined;
+    if (this.staticInterpolator) {
+      this.loadAlpha = 0;
+    }
     this.notifyPhaseChange();
   }
 
@@ -98,6 +155,10 @@ export class SimulationStateService {
    * ```
    */
   public advance(clockMillis: number): void {
+    if (this.staticInterpolator) {
+      this.loadAlpha = 0;
+      return;
+    }
     const phaseBeforeAdvance = this.phase;
     this.doAdvance(clockMillis);
     if (this.phase !== phaseBeforeAdvance) {
@@ -107,6 +168,9 @@ export class SimulationStateService {
 
   /** Returns the current interpolator or undefined if the state machine is not yet started. */
   public get interpolator(): Interpolator {
+    if (this.staticInterpolator) {
+      return this.staticInterpolator;
+    }
     if (this.phase === SimulationPhase.DEAD_LOADING) {
       return this.deadLoadingInterpolator;
     }
