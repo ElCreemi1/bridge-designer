@@ -33,6 +33,26 @@ export class CenterLoadAnalysisService implements OnDestroy {
     this.subscriptions.add(broker.loadBridgeCompletion.subscribe(() => { this.ready = false; }));
   }
 
+  /**
+   * Recover axial force directly from the solver's Float64 displacements. The
+   * legacy force getter passes displacements through Float32 vec2 buffers, which
+   * loses significant precision when subtracting dead load from dead-plus-unit load.
+   * This is the same EA/L axial-force relation, without that intermediate rounding.
+   */
+  private memberForce64(loadCase: number, memberIndex: number): number {
+    const member = this.bridgeService.bridge.members[memberIndex];
+    const dx = member.b.x - member.a.x;
+    const dy = member.b.y - member.a.y;
+    const length = Math.hypot(dx, dy);
+    if (!Number.isFinite(length) || length <= 0) throw new Error('A member has invalid length.');
+    const displacementX = this.unitAnalysis.getJointDisplacementX(loadCase, member.b.index) -
+      this.unitAnalysis.getJointDisplacementX(loadCase, member.a.index);
+    const displacementY = this.unitAnalysis.getJointDisplacementY(loadCase, member.b.index) -
+      this.unitAnalysis.getJointDisplacementY(loadCase, member.a.index);
+    return (member.shape.area * member.material.e / length) *
+      ((dx / length) * displacementX + (dy / length) * displacementY);
+  }
+
   run(forceKN: number): CenterLoadResult {
     if (!Number.isFinite(forceKN) || forceKN < 0 || forceKN > 1000) throw new Error('Choose a force from 0 to 1000 kN.');
     const bridge = this.bridgeService.bridge;
@@ -44,13 +64,13 @@ export class CenterLoadAnalysisService implements OnDestroy {
       if (this.unitAnalysis.status === AnalysisStatus.UNSTABLE || this.unitAnalysis.status === AnalysisStatus.NONE) {
         throw new Error('The bridge is unstable; add bracing or correct its connectivity before loading it.');
       }
-      // Check the actual unit-case equilibrium to catch a future solver load-factor change.
+      // Keep the original equilibrium check and tolerance; fix precision, not the test.
       for (const share of unitShares) {
         let vertical = 0;
         bridge.members.forEach((member, i) => {
           const sign = member.a.index === share.jointIndex ? 1 : member.b.index === share.jointIndex ? -1 : 0;
           if (sign) {
-            const increment = this.unitAnalysis.getMemberForce(share.jointIndex, i) - this.unitAnalysis.getMemberForce(0, i);
+            const increment = this.memberForce64(share.jointIndex, i) - this.memberForce64(0, i);
             vertical += sign * increment * (member.b.y - member.a.y) / member.lengthM;
           }
         });
@@ -77,7 +97,7 @@ export class CenterLoadAnalysisService implements OnDestroy {
     const signedRatios = new Float64Array(bridge.members.length);
     let overStrengthCount = 0, peakRatio = 0;
     bridge.members.forEach((_member, index) => {
-      const force = combine(loadCase => this.unitAnalysis.getMemberForce(loadCase, index));
+      const force = combine(loadCase => this.memberForce64(loadCase, index));
       const strength = force < 0 ? this.unitAnalysis.getMemberCompressiveStrength(index) : this.unitAnalysis.getMemberTensileStrength(index);
       if (!Number.isFinite(strength) || strength <= 0) throw new Error('A member has an invalid model strength.');
       memberForces[index] = force; signedRatios[index] = force / strength;
