@@ -1,6 +1,8 @@
 /* Copyright (c) 2025-2026 Gene Ressler
    SPDX-License-Identifier: GPL-3.0-or-later */
 import { Injectable } from '@angular/core';
+import { BridgeService } from './bridge.service';
+import { PastaStrandSessionService, pastaBundleWidth } from '../../features/center-load/pasta-strand-session.service';
 import { Geometry, Graphics, Point2D, Point2DInterface, Rectangle2D } from '../classes/graphics';
 import { Member } from '../classes/member.model';
 import { DesignJointRenderingService } from './design-joint-rendering.service';
@@ -26,6 +28,8 @@ export class DesignMemberRenderingService {
 
   constructor(
     private readonly analysisValidityService: AnalysisValidityService,
+    private readonly bridgeService: BridgeService,
+    private readonly pastaStrands: PastaStrandSessionService,
     inventoryService: InventoryService,
     private readonly viewportTransform: ViewportTransform2D,
     eventBrokerService: EventBrokerService,
@@ -51,12 +55,15 @@ export class DesignMemberRenderingService {
   public clear(ctx: CanvasRenderingContext2D, member: Member): void {
     this.viewportTransform.worldToViewportPoint(this.pointA, member.a);
     this.viewportTransform.worldToViewportPoint(this.pointB, member.b);
-    const pad = 2 * Math.max(DesignMemberRenderingService.getShapeStrokeWidth(member.shape), DesignJointRenderingService.JOINT_RADIUS_VIEWPORT);
+    const pad = Math.max(this.bridgeService.designConditions.isPasta ? 64 : 0,
+      2 * Math.max(DesignMemberRenderingService.getShapeStrokeWidth(member.shape), DesignJointRenderingService.JOINT_RADIUS_VIEWPORT));
     const rectangle = Rectangle2D.fromDiagonalPoints(this.pointA, this.pointB).pad(pad, pad);
     ctx.clearRect(rectangle.x0, rectangle.y0, rectangle.width, rectangle.height);
   }
   public getMemberWidthWorld(member: Member, minWidthViewport?: number): number {
-    const width = Math.max(this.lineWidths[member.shape.sizeIndex].outer, minWidthViewport ?? 0);
+    const visualWidth = this.bridgeService.designConditions.isPasta
+      ? pastaBundleWidth(this.pastaStrands.countFor(member)) : this.lineWidths[member.shape.sizeIndex].outer;
+    const width = Math.max(visualWidth, minWidthViewport ?? 0);
     return this.viewportTransform.viewportToWorldDistance(width);
   }
   private static getShapeStrokeWidth(shape: Shape): number {
@@ -85,12 +92,36 @@ export class DesignMemberRenderingService {
     return Failure.NONE;
   }
   private renderInternal(ctx: CanvasRenderingContext2D, member: Member, selected: boolean, mark: string | undefined, outerPalette: string[][][], innerPalette: string[][][]): void {
-    const failure = this.getFailure(member);
+    const failure = this.bridgeService.designConditions.isPasta ? Failure.NONE : this.getFailure(member);
     const outer = outerPalette[+selected][failure][member.material.index];
+    if (this.bridgeService.designConditions.isPasta) { this.renderPastaMember(ctx, member, outer, mark); return; }
     const inner = member.shape.section.shortName === 'Tube' ? innerPalette[+selected][failure][member.shape.section.index] : undefined;
     this.renderInWorldCoords(ctx, member.a, member.b, member.shape.sizeIndex, outer, inner,
       mark,
       this.showMemberNumbers || selected ? member.number : undefined);
+  }
+  /** Parallel strokes are schematic; the badge always reports the exact strand count. */
+  private renderPastaMember(ctx: CanvasRenderingContext2D, member: Member, color: string, mark?: string): void {
+    this.viewportTransform.worldToViewportPoint(this.pointA, member.a);
+    this.viewportTransform.worldToViewportPoint(this.pointB, member.b);
+    const a = this.pointA, b = this.pointB, count = this.pastaStrands.countFor(member);
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length < 1e-9) return;
+    const nx = -(b.y - a.y) / length, ny = (b.x - a.x) / length;
+    const width = pastaBundleWidth(count), drawn = Math.min(count, 7);
+    ctx.save(); ctx.strokeStyle = color; ctx.lineCap = 'round'; ctx.lineWidth = count === 1 ? 2 : 1.2;
+    ctx.setLineDash([]);
+    for (let i = 0; i < drawn; i++) {
+      const offset = drawn === 1 ? 0 : (i / (drawn - 1) - 0.5) * (width - 1.2);
+      ctx.beginPath(); ctx.moveTo(a.x + nx * offset, a.y + ny * offset);
+      ctx.lineTo(b.x + nx * offset, b.y + ny * offset); ctx.stroke();
+    }
+    if (mark) {
+      Graphics.setTickLineDash(ctx, length, [2, 10]); ctx.strokeStyle = mark; ctx.lineWidth = width + 4;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.restore();
+    this.renderMemberNumber(ctx, a, b, `M${member.number} ×${count}`, mark || color);
   }
   private renderInWorldCoords(ctx: CanvasRenderingContext2D, a: Point2DInterface, b: Point2DInterface, size: number, color: string, inner?: string, mark?: string, number?: number): void {
     this.viewportTransform.worldToViewportPoint(this.pointA, a);
@@ -111,7 +142,7 @@ export class DesignMemberRenderingService {
     ctx.lineCap = cap; ctx.lineWidth = width; ctx.strokeStyle = stroke;
     if (number) this.renderMemberNumber(ctx, a, b, number, color);
   }
-  private renderMemberNumber(ctx: CanvasRenderingContext2D, a: Point2DInterface, b: Point2DInterface, memberNumber: number, borderColor: string): void {
+  private renderMemberNumber(ctx: CanvasRenderingContext2D, a: Point2DInterface, b: Point2DInterface, memberNumber: number | string, borderColor: string): void {
     const font = ctx.font, align = ctx.textAlign, baseline = ctx.textBaseline;
     const fill = ctx.fillStyle, stroke = ctx.strokeStyle;
     const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2 + 1;
