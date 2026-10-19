@@ -13,10 +13,7 @@
     </select>
   </div>
   @if (loadMode !== 'truck' && display !== 'none') {
-    <static-load-panel #staticPanel class="static-load-panel" [mode]="loadMode"></static-load-panel>
-    @if (loadMode === 'pasta') {
-      <pasta-strand-overlay [panel]="staticPanel"></pasta-strand-overlay>
-    }
+    <static-load-panel class="static-load-panel" [mode]="loadMode"></static-load-panel>
   }
 </div>
 <fly-thru-settings-dialog></fly-thru-settings-dialog>

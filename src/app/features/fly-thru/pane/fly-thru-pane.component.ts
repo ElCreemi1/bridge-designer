@@ -14,10 +14,9 @@ import { StaticLoadMode, StaticLoadPanelComponent } from '../../center-load/stat
 import { SimulationStateService } from '../rendering/simulation-state.service';
 import { RenderingService } from '../rendering/rendering.service';
 import { BridgeService } from '../../../shared/services/bridge.service';
-import { PastaStrandOverlayComponent } from '../rendering/pasta-strand-overlay.component';
 
 @Component({
-  selector: 'fly-thru-pane', imports: [FlyThruSettingsDialogComponent, StaticLoadPanelComponent, PastaStrandOverlayComponent],
+  selector: 'fly-thru-pane', imports: [FlyThruSettingsDialogComponent, StaticLoadPanelComponent],
   templateUrl: './fly-thru-pane.component.html', styleUrl: './fly-thru-pane.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
