@@ -16,9 +16,10 @@ import { RenderingService } from '../rendering/rendering.service';
 import { BridgeService } from '../../../shared/services/bridge.service';
 import { PastaStrandSessionDirective } from '../../center-load/pasta-strand-session.directive';
 import { PastaTargetControlsComponent } from '../../center-load/pasta-target-controls.component';
+import { PastaBridgeControlsComponent } from '../../center-load/pasta-bridge-controls.component';
 
 @Component({
-  selector: 'fly-thru-pane', imports: [FlyThruSettingsDialogComponent, StaticLoadPanelComponent, PastaStrandSessionDirective, PastaTargetControlsComponent],
+  selector: 'fly-thru-pane', imports: [FlyThruSettingsDialogComponent, StaticLoadPanelComponent, PastaStrandSessionDirective, PastaTargetControlsComponent, PastaBridgeControlsComponent],
   templateUrl: './fly-thru-pane.component.html', styleUrl: './fly-thru-pane.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -30,7 +31,7 @@ export class FlyThruPaneComponent implements AfterViewInit {
   // phone rotated after startup is fully drawn; handleResize grows it if the pane is larger.
   width = Math.max(screen.availWidth, screen.availHeight);
   height = Math.max(screen.availWidth, screen.availHeight);
-  loadMode: 'truck' | StaticLoadMode = 'truck';
+  loadMode: 'truck' | 'pasta-bridge' | StaticLoadMode = 'truck';
   private activePointer: number | undefined;
   constructor(
     private readonly animationControlsOverlayService: AnimationControlsOverlayService,
@@ -48,9 +49,9 @@ export class FlyThruPaneComponent implements AfterViewInit {
   setLoadMode(event: Event): void {
     this.finishPointer();
     const value = (event.target as HTMLSelectElement).value;
-    this.applyLoadMode(value === 'center' || value === 'pasta' ? value : 'truck');
+    this.applyLoadMode(value === 'center' || value === 'pasta' || value === 'pasta-bridge' ? value : 'truck');
   }
-  private applyLoadMode(next: 'truck' | StaticLoadMode): void {
+  private applyLoadMode(next: 'truck' | 'pasta-bridge' | StaticLoadMode): void {
     if (next === this.loadMode) return;
     const wasTruck = this.loadMode === 'truck';
     this.loadMode = next;

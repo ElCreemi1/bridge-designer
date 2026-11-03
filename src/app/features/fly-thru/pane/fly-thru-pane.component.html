@@ -1,7 +1,7 @@
 <!-- Copyright (c) 2025-2026 Gene Ressler
      SPDX-License-Identifier: GPL-3.0-or-later -->
 <div #wrapper class="wrapper">
-  <canvas #flyThruCanvas [width]="width" [height]="height"
+  <canvas #flyThruCanvas [width]="width" [height]="height" [style.visibility]="loadMode === 'pasta-bridge' ? 'hidden' : 'visible'"
     (pointerdown)="handlePointerDown($event)" (pointermove)="handlePointerMove($event)"
     (pointerup)="handlePointerUp($event)" (contextmenu)="ignore()"></canvas>
   <div class="load-mode-controls">
@@ -9,10 +9,13 @@
     <select id="simulation-load-mode" [value]="loadMode" (change)="setLoadMode($event)">
       <option value="truck">Moving truck (3D)</option>
       <option value="center">Center load (3D static)</option>
-      <option value="pasta">Pasta 1.00 m (3D static)</option>
+      <option value="pasta">Pasta one truss (planar)</option>
+      <option value="pasta-bridge">Pasta full bridge - 45 mm</option>
     </select>
   </div>
-  @if (loadMode !== 'truck' && display !== 'none') {
+  @if (loadMode === 'pasta-bridge' && display !== 'none') {
+    <pasta-bridge-controls></pasta-bridge-controls>
+  } @else if (loadMode !== 'truck' && loadMode !== 'pasta-bridge' && display !== 'none') {
     <static-load-panel #staticPanel class="static-load-panel" [mode]="loadMode" [pastaStrandSession]="loadMode"></static-load-panel>
     @if (loadMode === 'pasta') {
       <pasta-target-controls [panel]="staticPanel"></pasta-target-controls>
