@@ -15,9 +15,10 @@ import { SimulationStateService } from '../rendering/simulation-state.service';
 import { RenderingService } from '../rendering/rendering.service';
 import { BridgeService } from '../../../shared/services/bridge.service';
 import { PastaStrandSessionDirective } from '../../center-load/pasta-strand-session.directive';
+import { PastaTargetControlsComponent } from '../../center-load/pasta-target-controls.component';
 
 @Component({
-  selector: 'fly-thru-pane', imports: [FlyThruSettingsDialogComponent, StaticLoadPanelComponent, PastaStrandSessionDirective],
+  selector: 'fly-thru-pane', imports: [FlyThruSettingsDialogComponent, StaticLoadPanelComponent, PastaStrandSessionDirective, PastaTargetControlsComponent],
   templateUrl: './fly-thru-pane.component.html', styleUrl: './fly-thru-pane.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
