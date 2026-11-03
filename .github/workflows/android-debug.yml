@@ -55,12 +55,13 @@ jobs:
         run: npm ci
       - name: Install experimental Android packaging dependencies
         run: |
-          npm install --save-exact @capacitor/core@7 @capacitor/android@7
+          npm install --save-exact @capacitor/core@7 @capacitor/android@7 @capacitor/filesystem@7 @capacitor/share@7
           npm install --save-dev --save-exact @capacitor/cli@7
-      - name: Test center-load, pasta and 3D simulation regression suites
+      - name: Test center-load, pasta, PDF export and 3D simulation regression suites
         run: >-
           npx ng test --watch=false --browsers=ChromeHeadless
           --include='**/center-load/*.spec.ts' --include='**/fly-thru/**/*.spec.ts' --include='**/shared/services/pasta-site.spec.ts'
+          --include='**/drawings/*.spec.ts'
       - name: Compile Angular application with root-relative assets
         run: |
           npx ng build --configuration production --base-href /
@@ -75,6 +76,13 @@ jobs:
           test -s android/app/src/main/assets/public/index.html
           test -s android/app/src/main/assets/public/img/splash.png
           test -s android/app/src/main/assets/public/img/loading.gif
+          node - <<'JS'
+          const fs = require('fs');
+          const plugins = JSON.parse(fs.readFileSync('android/app/src/main/assets/capacitor.plugins.json', 'utf8'));
+          for (const pkg of ['@capacitor/filesystem', '@capacitor/share']) {
+            if (!plugins.some(plugin => plugin.pkg === pkg)) throw new Error(`Missing native PDF plugin: ${pkg}`);
+          }
+          JS
       - name: Restrict phone activity to landscape
         shell: bash
         run: |
@@ -126,7 +134,7 @@ jobs:
             echo "Artifact: $ARTIFACT_URL"
             echo 'Focused center-load numerical tests, compilation and packaging succeeded. This is not a device-tested release.'
             echo 'Choose Center load (2D static) in the Simulation selector. Loads are kN per modeled truss; original app dead-load factors remain. Not a real-world structural safety rating.'
-            echo 'Landscape is requested. Touch interaction and file handling still require device validation.'
+            echo 'Landscape is requested. PDF export now uses native app-cache files and Android sharing; receiving-app behavior still requires device validation.'
             echo 'A temporary debug signing key is used; later builds may require uninstalling. Export bridge files before uninstalling.'
             echo 'Resolved dependency records are included; the repository lockfile was not changed by this workflow.'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -9,6 +9,7 @@ import { EventBrokerService } from '../../shared/services/event-broker.service';
 import { BridgePdfRenderingService } from './bridge-pdf-rendering.service';
 import { MemberTablePdfRenderingService } from './member-table-pdf-rendering.service';
 import { TitleBlockPdfRenderingService } from './title-block-pdf-rendering.service';
+import { deliverPdf } from './pdf-delivery';
 
 export const DRAWING_MARGIN_MM = 25.4 * 0.5;
 export const DRAWING_LINE_WIDTH_MM = 0.1;
@@ -17,6 +18,7 @@ const DRAWING_SEPARATION = 25.4 * 0.3;
 @Injectable({ providedIn: 'root' })
 export class DrawingsService {
   private inAnimation = false;
+  private delivering = false;
   constructor(
     private readonly bridgePdfRenderingService: BridgePdfRenderingService,
     private readonly bridgeService: BridgeService,
@@ -27,16 +29,24 @@ export class DrawingsService {
   ) {
     eventBrokerService.uiModeRequest.subscribe(info => { this.inAnimation = info.data === 'animation'; });
     eventBrokerService.printRequest.subscribe(() => {
+      if (this.delivering) return;
       try { this.createPDF(); }
       catch (error) { window.alert(error instanceof Error ? error.message : String(error)); }
     });
+  }
+
+  private present(doc: jsPDF, filename: string): void {
+    this.delivering = true;
+    void deliverPdf(doc, filename)
+      .catch(error => window.alert(error instanceof Error ? error.message : String(error)))
+      .finally(() => { this.delivering = false; });
   }
 
   public createPDF(): jsPDF {
     if (this.bridgeService.designConditions.isPasta) {
       if (this.inAnimation) throw new Error('Return to the drawing before exporting so the latest optimized strand counts are included.');
       const booklet = this.pastaBooklet.create();
-      window.open(URL.createObjectURL(booklet.output('blob')), '_blank');
+      this.present(booklet, 'pasta-bridge-booklet.pdf');
       return booklet;
     }
     const doc = new jsPDF({ format: 'letter', orientation: 'landscape' });
@@ -56,11 +66,7 @@ export class DrawingsService {
       remainingRows = this.memberTablePdfRenderingService.drawContinuationSheet(doc, remainingRows, titleBlockTopY);
     }
 
-    // Build a PDF file and preview it. Assumes the browser has a PDF viewer linked to the MIME type.
-    const blob = doc.output('blob');
-    // This makes a funky random string. Specifying the name requires a hack that doesn't look robust.
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+    this.present(doc, 'bridge-drawing.pdf');
     return doc;
   }
 }
