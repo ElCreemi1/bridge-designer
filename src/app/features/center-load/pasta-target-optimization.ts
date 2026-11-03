@@ -9,8 +9,10 @@ export type TargetOptions = {
   bounds: { xMin: number; xMax: number; yMin: number; yMax: number };
   geometryFirst?: boolean;
   lockedJoints?: readonly number[];
+  /** Optional explicit analysis cap; omitted searches use the time ceiling. */
   maxEvaluations?: number;
   geometryPasses?: number;
+  /** Optional explicit cycle cap; otherwise stop on time or no improvement. */
   cycles?: number;
   /** Elapsed-time ceiling, at most five minutes; checked between solves. */
   maxDurationMs?: number;
@@ -27,12 +29,12 @@ export async function optimizePastaTarget(input: PastaInput, options: TargetOpti
   const startedAt = performance.now(), duration = options.maxDurationMs ?? 300000;
   if (!Number.isFinite(duration) || duration <= 0 || duration > 300000) throw new Error('Search duration must be above 0 and at most 300000 ms.');
   const { targetMassG, maxStrandsPerMember: cap, maxStrandLengthM: stock, gridStepWorld: step, bounds } = options;
-  const limit = options.maxEvaluations ?? 3000, passes = options.geometryPasses ?? 2, cycles = options.cycles ?? 6;
+  const limit = options.maxEvaluations ?? Infinity, passes = options.geometryPasses ?? 2, cycles = options.cycles ?? Infinity;
   if (!Number.isFinite(targetMassG) || targetMassG <= 0 || targetMassG > 1000000) throw new Error('Target hanging mass must be from above 0 to 1,000,000 g.');
   if (!Number.isInteger(cap) || cap < 1 || cap > 10000) throw new Error('Choose 1–10000 strands per member.');
   if (![stock, step].every(v => Number.isFinite(v) && v > 0) || !Object.values(bounds).every(Number.isFinite) ||
-      bounds.xMax <= bounds.xMin || bounds.yMax <= bounds.yMin || !Number.isInteger(limit) || limit < 16 || limit > 20000 ||
-      !Number.isInteger(passes) || passes < 1 || passes > 8 || !Number.isInteger(cycles) || cycles < 1 || cycles > 100) throw new Error('Invalid search limits, grid or bounds.');
+      bounds.xMax <= bounds.xMin || bounds.yMax <= bounds.yMin || (limit !== Infinity && (!Number.isInteger(limit) || limit < 16 || limit > 20000)) ||
+      !Number.isInteger(passes) || passes < 1 || passes > 8 || (cycles !== Infinity && (!Number.isInteger(cycles) || cycles < 1 || cycles > 100))) throw new Error('Invalid search limits, grid or bounds.');
   const original = input.joints.map(p => ({ x: p.x, y: p.y }));
   const members = input.members.map(m => ({ a: m.a, b: m.b }));
   const supports = { ...input.supports }, properties = { ...input.properties }, deck = supports.loadedJointCount;

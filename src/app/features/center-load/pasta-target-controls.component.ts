@@ -21,12 +21,10 @@ type Preview = Awaited<ReturnType<typeof optimizePastaTarget>>;
         <input type="number" min="1" max="1000000" step="1" [value]="targetG" (input)="setTarget($event)" />
       </label>
       <label>Mode<select [value]="geometryFirst ? 'geometry' : 'strands'" (change)="setMode($event)">
-        <option value="geometry">Beam lengths first, then strands</option>
+        <option value="geometry">Symmetric geometry and strands</option>
         <option value="strands">Strands only; keep geometry</option>
       </select></label>
-      <label>Search<select [value]="effort" (change)="setEffort($event)">
-        <option value="500">Quick (500 analyses)</option><option value="3000">Normal (3000)</option><option value="6000">Thorough (6000)</option>
-      </select></label>
+      <p>Search: up to 5 minutes, without an analysis-count cap. Stops earlier after three cycles without improvement.</p>
       <p>Minimize pasta mass while meeting the required center load. This is not the separate mass-budget optimizer.</p>
       <p>Limits from the other panel: {{ panel.maxStrandsPerMember }} strands/member; {{ (settings.maxStrandLengthM * 100).toFixed(1) }} cm stock.</p>
       <button type="button" [disabled]="running || !bridge.designConditions.isPasta" (click)="search()">Find design</button>
@@ -36,7 +34,7 @@ type Preview = Awaited<ReturnType<typeof optimizePastaTarget>>;
       @if (preview; as r) {
         <p [class.warning]="!r.metTarget">{{ r.metTarget ? 'Target met in this model' : 'Target not found' }}.
           Pasta: {{ (r.result.massKg * 1000).toFixed(2) }} g (was {{ baselineMassG.toFixed(2) }} g); predicted first failure: {{ capacityText }}.</p>
-        <p>{{ r.changedJointCount }} joint(s) moved; {{ r.evaluations }} analyses{{ r.limited ? '; search limit reached' : '' }}.</p>
+        <p>{{ r.changedJointCount }} joint(s) moved; {{ r.evaluations }} analyses in {{ (r.elapsedMs / 1000).toFixed(1) }} s{{ r.timeLimited ? '; 5-minute limit reached' : '' }}.</p>
         <svg viewBox="0 0 280 110" role="img" aria-label="Geometry preview: gray original, blue proposed">
           @for (line of lines; track $index) {
             <line [attr.x1]="line.ox1" [attr.y1]="line.oy1" [attr.x2]="line.ox2" [attr.y2]="line.oy2" stroke="#aaa" stroke-dasharray="3 3" />
@@ -62,9 +60,8 @@ type Preview = Awaited<ReturnType<typeof optimizePastaTarget>>;
 })
 export class PastaTargetControlsComponent implements OnInit, OnDestroy {
   @Input({ required: true }) panel!: StaticLoadPanelComponent;
-  targetG = 1000;
+  targetG = 2000;
   geometryFirst = true;
-  effort = 3000;
   running = false;
   message = '';
   preview: Preview | undefined;
@@ -86,7 +83,6 @@ export class PastaTargetControlsComponent implements OnInit, OnDestroy {
   }
   setTarget(event: Event): void { this.targetG = (event.target as HTMLInputElement).valueAsNumber; this.invalidate(); }
   setMode(event: Event): void { this.geometryFirst = (event.target as HTMLSelectElement).value === 'geometry'; this.invalidate(); }
-  setEffort(event: Event): void { this.effort = Number((event.target as HTMLSelectElement).value); this.invalidate(); }
   cancel(): void { this.abort?.abort(); }
   private invalidate(): void { this.cancel(); this.preview = undefined; this.lines = []; }
   private input(): PastaInput {
@@ -101,7 +97,7 @@ export class PastaTargetControlsComponent implements OnInit, OnDestroy {
   private key(): string {
     return JSON.stringify({ input: this.input(), fixed: this.bridge.bridge.joints.map(j => j.isFixed), target: this.targetG,
       geometry: this.geometryFirst, step: this.grid.grid.snapMultiple, max: this.panel.maxStrandsPerMember,
-      stock: this.settings.maxStrandLengthM, effort: this.effort });
+      stock: this.settings.maxStrandLengthM });
   }
   async search(): Promise<void> {
     if (this.running || !this.bridge.designConditions.isPasta) return;
@@ -112,7 +108,7 @@ export class PastaTargetControlsComponent implements OnInit, OnDestroy {
       this.baselineMassG = analyzePasta(source).massKg * 1000;
       const result = await optimizePastaTarget(source, { targetMassG: this.targetG,
         maxStrandsPerMember: this.panel.maxStrandsPerMember, maxStrandLengthM: this.settings.maxStrandLengthM,
-        geometryFirst: this.geometryFirst, maxEvaluations: this.effort,
+        geometryFirst: this.geometryFirst, maxDurationMs: 300000,
         gridStepWorld: DesignGrid.FINE_GRID_SIZE * this.grid.grid.snapMultiple,
         bounds: { xMin: box.x0, xMax: box.x0 + box.width, yMin: box.y0, yMax: box.y0 + box.height },
         lockedJoints: this.bridge.bridge.joints.filter(j => j.isFixed).map(j => j.index), signal: controller.signal,
