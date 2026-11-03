@@ -3,6 +3,8 @@
 
 import { Injectable } from '@angular/core';
 import { jsPDF } from 'jspdf';
+import { BridgeService } from '../../shared/services/bridge.service';
+import { PastaBuildPdfService } from './pasta-build-pdf.service';
 import { EventBrokerService } from '../../shared/services/event-broker.service';
 import { BridgePdfRenderingService } from './bridge-pdf-rendering.service';
 import { MemberTablePdfRenderingService } from './member-table-pdf-rendering.service';
@@ -14,18 +16,29 @@ const DRAWING_SEPARATION = 25.4 * 0.3;
 
 @Injectable({ providedIn: 'root' })
 export class DrawingsService {
+  private inAnimation = false;
   constructor(
     private readonly bridgePdfRenderingService: BridgePdfRenderingService,
+    private readonly bridgeService: BridgeService,
+    private readonly pastaBooklet: PastaBuildPdfService,
     eventBrokerService: EventBrokerService,
     private readonly memberTablePdfRenderingService: MemberTablePdfRenderingService,
     private readonly titleBlockPdfRenderingService: TitleBlockPdfRenderingService,
   ) {
+    eventBrokerService.uiModeRequest.subscribe(info => { this.inAnimation = info.data === 'animation'; });
     eventBrokerService.printRequest.subscribe(() => {
-      this.createPDF();
+      try { this.createPDF(); }
+      catch (error) { window.alert(error instanceof Error ? error.message : String(error)); }
     });
   }
 
   public createPDF(): jsPDF {
+    if (this.bridgeService.designConditions.isPasta) {
+      if (this.inAnimation) throw new Error('Return to the drawing before exporting so the latest optimized strand counts are included.');
+      const booklet = this.pastaBooklet.create();
+      window.open(URL.createObjectURL(booklet.output('blob')), '_blank');
+      return booklet;
+    }
     const doc = new jsPDF({ format: 'letter', orientation: 'landscape' });
     // Becomes title of PDF preview window.
     doc.setProperties({title: 'Bridge Drawing'});
