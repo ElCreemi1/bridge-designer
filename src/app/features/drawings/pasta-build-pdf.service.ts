@@ -98,12 +98,12 @@ export class PastaBuildPdfService {
       const x = (ax + bx) / 2 - (by - ay) / length * offset, y = (ay + by) / 2 + (bx - ax) / length * offset;
       const label = `M${part.number} x${part.count}`, width = doc.getTextWidth(label) + 1.2;
       doc.setDrawColor(160); doc.setLineWidth(0.1); doc.line((ax + bx) / 2, (ay + by) / 2, x, y);
-      doc.setFillColor(255); doc.rect(x - width / 2, y - 1.5, width, 3, 'F');
+      doc.setFillColor('white'); doc.rect(x - width / 2, y - 1.5, width, 3, 'F');
       doc.text(label, x, y, { align: 'center', baseline: 'middle' }); doc.setDrawColor(30); doc.setLineWidth(0.3);
     });
     model.points.forEach((point, i) => {
       const x = tx + point.x * scale, y = ty + point.y * scale;
-      doc.setFillColor(255); doc.circle(x, y, fullSize ? 0.7 : 0.5, 'FD');
+      doc.setFillColor('white'); doc.circle(x, y, fullSize ? 0.7 : 0.5, 'FD');
       doc.setFontSize(5); doc.text(`J${i + 1}`, x + 1, y - 1); doc.setFontSize(fullSize ? 6 : 7);
     });
   }
