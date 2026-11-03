@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf';
 import { BridgeService } from '../../shared/services/bridge.service';
 import { PastaSettingsService } from '../../shared/services/pasta-settings.service';
 import { PastaStrandSessionService } from '../center-load/pasta-strand-session.service';
-import { BUILD_MARGIN_MM, makePastaBuild, PastaBuild, pastaBuildTiles } from './pasta-build-layout';
+import { BUILD_MARGIN_MM, makePastaBuild, PastaBuild, pastaBuildTiles, pastaBuildInkBounds, pastaCutList } from './pasta-build-layout';
 
 /** A vector PDF construction booklet for ONE modeled pasta truss. */
 @Injectable({ providedIn: 'root' })
@@ -19,7 +19,8 @@ export class PastaBuildPdfService {
     const doc = new jsPDF({ unit: 'mm', format, orientation: 'landscape' });
     doc.setProperties({ title: 'Pasta bridge construction booklet' });
     const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight(), margin = BUILD_MARGIN_MM;
-    const plan = pastaBuildTiles(model, w, h);
+    const ink = pastaBuildInkBounds(model, (text, size) => { doc.setFontSize(size); return doc.getTextWidth(text); });
+    const plan = pastaBuildTiles(model, w, h, ink);
     plan.tiles.forEach((tile, index) => {
       if (index) doc.addPage();
       this.heading(doc, `FULL SIZE 1:1 - tile R${tile.row + 1} C${tile.column + 1} of ${plan.rows} rows x ${plan.columns} columns`);
@@ -48,24 +49,29 @@ export class PastaBuildPdfService {
       for (const dx of [0, 50, 100]) doc.line(margin + dx, barY - 1.5, margin + dx, barY + 1.5);
       doc.setFontSize(7); doc.text('Measure this bar: 100 mm. Match identical coordinate crosses when assembling.', margin, h - margin);
     });
-    // Illustrated inventory: every member is listed, with the exact number of separate strands.
-    for (let start = 0; start < model.parts.length; start += 8) {
-      doc.addPage(); this.heading(doc, `PARTS INVENTORY - members ${start + 1}-${Math.min(start + 8, model.parts.length)}`);
-      doc.setFontSize(7); doc.text('One modeled truss. Lengths are joint-center to joint-center; no glue, lap or cutting allowance. Illustrations are NOT full size.', margin, margin + 6);
-      const cardW = (w - 2 * margin - 8) / 2, cardH = (h - 2 * margin - 24) / 4;
-      model.parts.slice(start, start + 8).forEach((part, i) => {
-        const x = margin + (i % 2) * (cardW + 8), y = margin + 12 + Math.floor(i / 2) * cardH;
-        doc.setDrawColor(180); doc.setLineWidth(0.15); doc.rect(x, y, cardW, cardH - 2);
-        doc.setTextColor(part.overLength ? 170 : 0, 0, 0); doc.setFontSize(10);
-        doc.text(`M${part.number}   x${part.count} strands`, x + 4, y + 6);
-        doc.setFontSize(8); doc.text(`J${part.a + 1} to J${part.b + 1}   ${part.lengthMm.toFixed(1)} mm (${(part.lengthMm / 10).toFixed(2)} cm)`, x + 4, y + 12);
-        doc.setDrawColor(part.overLength ? 170 : 40, 40, 40); doc.setLineWidth(0.45);
-        const length = Math.max(12, Math.min(cardW - 14, part.lengthMm * 0.3));
-        for (let strand = 0; strand < Math.min(part.count, 4); strand++) doc.line(x + 5, y + 18 + strand * 1.4, x + 5 + length, y + 18 + strand * 1.4);
-        doc.setTextColor(0); doc.setFontSize(7);
-        doc.text(part.overLength ? `LONGER than ${model.maxStrandLengthMm.toFixed(0)} mm stock - redesign; no splice assumed.` : 'Cut quantity above; bundle only at the joints.', x + 4, y + cardH - 6);
+    const cuts = pastaCutList(model), columnCount = 3, columnWidth = (w - 2 * margin) / columnCount;
+    const top = margin + 23, rowHeight = 5;
+    const rowsPerColumn = Math.floor((h - margin - 22 - top) / rowHeight);
+    const rowsPerPage = rowsPerColumn * columnCount;
+    for (let start = 0; start < cuts.length; start += rowsPerPage) {
+      doc.addPage(); this.heading(doc, 'CUT LIST - lengths and quantities');
+      doc.setFontSize(7); doc.text('One modeled truss. Joint-center lengths; no glue, lap, cutting allowance or waste included.', margin, margin + 6);
+      doc.text('Quantity means separate spaghetti pieces. Equal lengths are combined across all members.', margin, margin + 11);
+      for (let column = 0; column < columnCount; column++) {
+        if (start + column * rowsPerColumn >= cuts.length) break;
+        const x = margin + column * columnWidth;
+        doc.setTextColor(0); doc.setFontSize(8); doc.text('Length (mm)', x + 2, top - 5);
+        doc.text('Quantity', x + columnWidth - 8, top - 5, { align: 'right' });
+      }
+      cuts.slice(start, start + rowsPerPage).forEach((cut, i) => {
+        const x = margin + Math.floor(i / rowsPerColumn) * columnWidth, y = top + (i % rowsPerColumn) * rowHeight;
+        doc.setTextColor(cut.overLength ? 170 : 0, 0, 0); doc.setFontSize(8);
+        doc.text(`${cut.labelMm}${cut.overLength ? ' *' : ''}`, x + 2, y);
+        doc.text(String(cut.quantity), x + columnWidth - 8, y, { align: 'right' });
       });
-      doc.setFontSize(7); doc.text(`Total: ${model.totalPieces} separate pieces; ${(model.totalLengthMm / 1000).toFixed(3)} m of pasta, excluding waste.`, margin, h - margin);
+      doc.setTextColor(0); doc.setFontSize(7);
+      doc.text(`* Longer than ${model.maxStrandLengthMm.toFixed(1)} mm stock; redesign needed, no splice assumed.`, margin, h - margin - 10);
+      doc.text(`Total: ${model.totalPieces} pieces; ${(model.totalLengthMm / 1000).toFixed(3)} m of pasta. Quantities are NOT doubled for two sides.`, margin, h - margin - 5);
     }
     doc.addPage(); this.heading(doc, 'BUILD OVERVIEW - reduced scale, NOT a cutting template');
     const minX = Math.min(...model.points.map(p => p.x)), maxX = Math.max(...model.points.map(p => p.x));
