@@ -12,6 +12,8 @@ export type TargetOptions = {
   maxEvaluations?: number;
   geometryPasses?: number;
   cycles?: number;
+  /** Elapsed-time ceiling, at most five minutes; checked between solves. */
+  maxDurationMs?: number;
   signal?: AbortSignal;
   onProgress?: (phase: string, evaluations: number) => void;
 };
@@ -22,6 +24,8 @@ export type TargetOptions = {
  */
 export async function optimizePastaTarget(input: PastaInput, options: TargetOptions,
   analyzer: typeof analyzePasta = analyzePasta) {
+  const startedAt = performance.now(), duration = options.maxDurationMs ?? 300000;
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 300000) throw new Error('Search duration must be above 0 and at most 300000 ms.');
   const { targetMassG, maxStrandsPerMember: cap, maxStrandLengthM: stock, gridStepWorld: step, bounds } = options;
   const limit = options.maxEvaluations ?? 3000, passes = options.geometryPasses ?? 2, cycles = options.cycles ?? 6;
   if (!Number.isFinite(targetMassG) || targetMassG <= 0 || targetMassG > 1000000) throw new Error('Target hanging mass must be from above 0 to 1,000,000 g.');
@@ -90,10 +94,19 @@ export async function optimizePastaTarget(input: PastaInput, options: TargetOpti
   const best: Candidate[] = [];
   let evaluations = 0, geometryEvaluations = 0, cyclesCompleted = 0, phase = 'reinforcement';
   const cancel = () => { if (options.signal?.aborted) throw new Error('Optimization cancelled.'); };
+  let timeLimited = false;
+  const available = () => {
+    cancel(); timeLimited = timeLimited || performance.now() - startedAt >= duration;
+    return !timeLimited && evaluations < limit;
+  };
   const evaluate = async (points: typeof original, counts: Int32Array, required = false): Promise<Candidate | undefined> => {
-    cancel(); if (evaluations >= limit) return undefined;
+    if (!available()) {
+      if (required) throw new Error('Search time limit reached before the initial analysis.');
+      return undefined;
+    }
     if (evaluations > 0 && evaluations % 8 === 0) {
-      options.onProgress?.(phase, evaluations); await new Promise<void>(resolve => setTimeout(resolve, 0)); cancel();
+      options.onProgress?.(phase, evaluations); await new Promise<void>(resolve => setTimeout(resolve, 0));
+      if (!available()) return undefined;
     }
     evaluations++;
     try {
@@ -109,7 +122,7 @@ export async function optimizePastaTarget(input: PastaInput, options: TargetOpti
   const size = async (start: Candidate): Promise<Candidate> => {
     let current = start;
     phase = 'reinforcement';
-    while (!feasible(current.result) && overLength(current.result) <= 1e-9 && evaluations < limit) {
+    while (!feasible(current.result) && overLength(current.result) <= 1e-9 && available()) {
       const order = groups.filter(g => current.counts[g[0]] < cap).slice().sort((a, b) =>
         Math.max(...b.map(i => Math.abs(current.result.signedRatios[i]))) - Math.max(...a.map(i => Math.abs(current.result.signedRatios[i]))));
       let next: Candidate | undefined;
@@ -118,7 +131,7 @@ export async function optimizePastaTarget(input: PastaInput, options: TargetOpti
         next = await evaluate(current.joints, counts);
         // Accept plateaus: tied governing groups may need reinforcement in turn.
         // Capped groups are excluded, so one capped member never ends the search.
-        if (next || evaluations >= limit) break;
+        if (next || !available()) break;
       }
       if (!next) break;
       current = next;
@@ -126,10 +139,10 @@ export async function optimizePastaTarget(input: PastaInput, options: TargetOpti
     phase = 'pruning';
     if (feasible(current.result)) {
       let changed = true;
-      while (changed && evaluations < limit) {
+      while (changed && available()) {
         changed = false;
         const order = groups.slice().sort((a, b) => b.reduce((v, i) => v + current.result.strandMassKg[i], 0) - a.reduce((v, i) => v + current.result.strandMassKg[i], 0));
-        for (const group of order) if (current.counts[group[0]] > 1 && evaluations < limit) {
+        for (const group of order) if (current.counts[group[0]] > 1 && available()) {
           const counts = current.counts.slice(); group.forEach(i => counts[i]--);
           const trial = await evaluate(current.joints, counts);
           if (trial && feasible(trial.result)) { current = trial; changed = true; }
@@ -153,7 +166,7 @@ export async function optimizePastaTarget(input: PastaInput, options: TargetOpti
     let trial = await evaluate(points, counts);
     if (!trial) return undefined;
     trial = await size(trial);
-    if (evaluations < limit) {
+    if (available()) {
       const base = await evaluate(points, ones);
       if (base) { const fresh = await size(base); if (better(fresh.result, trial.result)) trial = fresh; }
     }
@@ -162,18 +175,18 @@ export async function optimizePastaTarget(input: PastaInput, options: TargetOpti
   const directions = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
   const onGrid = (v: number) => Math.abs(v / step - Math.round(v / step)) < 1e-7;
   let stale = 0;
-  for (let cycle = 0; cycle < cycles && stale < 3 && evaluations < limit; cycle++) {
+  for (let cycle = 0; cycle < cycles && stale < 3 && available(); cycle++) {
     const before = current.result;
     const sized = await resize(current.joints, current.counts);
     if (sized && better(sized.result, current.result)) current = sized;
     if (options.geometryFirst !== false) {
       const multiple = [4, 2, 1][Math.min(cycle, 2)];
-      for (let pass = 0; pass < passes && evaluations < limit; pass++) {
+      for (let pass = 0; pass < passes && available(); pass++) {
         let moved = false;
-        for (let i = 0; i < original.length && evaluations < limit; i++) {
+        for (let i = 0; i < original.length && available(); i++) {
           const j = mirror[i]; if (i > j || locked.has(i) || locked.has(j)) continue;
           for (const [dx, dy] of directions) {
-            if (evaluations >= limit) break;
+            if (!available()) break;
             if (i === j && dx !== 0) continue;
             const points = current.joints.map(p => ({ ...p }));
             const x = i === j ? mid : Math.round((points[i].x + dx * step * multiple) / step) * step;
@@ -190,10 +203,11 @@ export async function optimizePastaTarget(input: PastaInput, options: TargetOpti
     }
     cyclesCompleted++; stale = better(current.result, before) ? 0 : stale + 1;
   }
-  cancel(); if (best.length) current = best[0];
-  const limited = evaluations >= limit, metTarget = feasible(current.result);
+  available(); if (best.length) current = best[0];
+  const limited = timeLimited || evaluations >= limit, metTarget = feasible(current.result);
   return { joints: current.joints.map(p => ({ ...p })), strandCounts: current.counts.slice(), result: current.result,
-    targetMassG, targetForceN, metTarget, evaluations, geometryEvaluations, cyclesCompleted, limited,
+    targetMassG, targetForceN, metTarget, evaluations, geometryEvaluations, cyclesCompleted, limited, timeLimited,
+    elapsedMs: performance.now() - startedAt,
     changedJointCount: current.joints.filter((p, i) => Math.hypot(p.x - original[i].x, p.y - original[i].y) > epsilon).length,
-    reason: metTarget ? 'target-met' : limited ? 'evaluation-limit' : overLength(current.result) > 1e-9 ? 'over-length' : 'target-not-found' };
+    reason: metTarget ? 'target-met' : timeLimited ? 'time-limit' : limited ? 'evaluation-limit' : overLength(current.result) > 1e-9 ? 'over-length' : 'target-not-found' };
 }
